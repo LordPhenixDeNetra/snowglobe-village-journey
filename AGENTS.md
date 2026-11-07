@@ -28,3 +28,5 @@ use the editor.
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
+
+- Village points of interest live in src/lib/village-places.ts; the AI tour server function may only return ids from that list, so keep scene and AI catalog in sync.
