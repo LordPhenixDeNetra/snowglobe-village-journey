@@ -64,7 +64,7 @@ function BigTree() {
       const h = r() * 4.2;
       const rad = (1 - h / 4.8) * 1.9;
       const a = r() * Math.PI * 2;
-      return { p: [Math.cos(a) * rad, 1 + h, Math.sin(a) * rad] as [number, number, number], c: ["#ff4040", "#ffd700", "#40a0ff", "#ffffff"][i % 4] };
+      return { p: [Math.cos(a) * rad, 1 + h, Math.sin(a) * rad] as [number, number, number], c: ["#ff4040", "#ffd700", "#40a0ff", "#ffffff"][i % 4]! };
     });
   }, []);
   const group = useRef<THREE.Group>(null);
@@ -108,7 +108,7 @@ function Snow({ count = 1500 }) {
   }, [count]);
   useFrame((_, d) => {
     const dt = Math.min(d, 0.05);
-    const p = ref.current!.geometry.attributes.position as THREE.BufferAttribute;
+    const p = ref.current!.geometry.attributes["position"] as THREE.BufferAttribute;
     for (let i = 0; i < count; i++) {
       let y = p.getY(i) - dt * 0.8;
       if (y < 0) y = 15;
@@ -130,7 +130,7 @@ function Snow({ count = 1500 }) {
 function Snowman({ position }: { position: [number, number, number] }) {
   return (
     <group position={position}>
-      {[[0.5, 0.45], [0.35, 1.15], [0.25, 1.65]].map(([r, y], i) => (
+      {([[0.5, 0.45], [0.35, 1.15], [0.25, 1.65]] as [number, number][]).map(([r, y], i) => (
         <mesh key={i} position={[0, y, 0]} castShadow>
           <sphereGeometry args={[r, 16, 16]} />
           <meshStandardMaterial color="#fafcff" />
@@ -153,7 +153,7 @@ function Scene() {
     const colors = ["#b23a3a", "#2f6b4f", "#c98b3a", "#3b5a8a", "#8a4a6b", "#a85a32"];
     return Array.from({ length: 8 }, (_, i) => {
       const a = (i / 8) * Math.PI * 2;
-      return { p: [Math.cos(a) * 9, 0, Math.sin(a) * 9] as [number, number, number], rot: -a - Math.PI / 2, c: colors[i % colors.length] };
+      return { p: [Math.cos(a) * 9, 0, Math.sin(a) * 9] as [number, number, number], rot: -a - Math.PI / 2, c: colors[i % colors.length]! };
     });
   }, []);
   const trees = useMemo(() => {
