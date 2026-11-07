@@ -192,7 +192,7 @@ export default function Village() {
   const [ready, setReady] = useState(false);
   return (
     <div className="relative h-screen w-full bg-background" data-scene-ready={ready || undefined}>
-      <Canvas shadows camera={{ position: [0, 1.7, 16], fov: 60 }} onCreated={() => setTimeout(() => setReady(true), 300)}>
+      <Canvas shadows camera={{ position: [0, 2.5, 7.5], fov: 60 }} onCreated={() => setTimeout(() => setReady(true), 300)}>
         <XR store={store}>
           <Scene />
         </XR>
