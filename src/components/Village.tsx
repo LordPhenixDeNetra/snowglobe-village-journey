@@ -3,6 +3,46 @@ import { OrbitControls, Environment, Lightformer, Sky } from "@react-three/drei"
 import { XR, XROrigin, createXRStore } from "@react-three/xr";
 import { useMemo, useRef, useState } from "react";
 import * as THREE from "three";
+import { useServerFn } from "@tanstack/react-start";
+import { PLACES, type Place } from "@/lib/village-places";
+import { planTour, type TourStop } from "@/lib/tour.functions";
+
+function CameraRig({ focus }: { focus: Place | null }) {
+  const done = useRef(true);
+  const last = useRef<string | null>(null);
+  useFrame(({ camera, controls }, d) => {
+    const c = controls as unknown as { target: THREE.Vector3; update: () => void } | null;
+    if (!c || !focus) return;
+    if (last.current !== focus.id) { last.current = focus.id; done.current = false; }
+    if (done.current) return;
+    const t = new THREE.Vector3(...focus.pos);
+    const dir = t.clone().setY(0);
+    if (dir.lengthSq() < 0.01) dir.set(0, 0, 1);
+    dir.normalize();
+    const camPos = t.clone().add(dir.multiplyScalar(focus.id === "grand-sapin" ? 9 : -5)).setY(focus.pos[1] + 2.5);
+    const k = 1 - Math.exp(-3 * Math.min(d, 0.05));
+    c.target.lerp(t, k);
+    camera.position.lerp(camPos, k);
+    c.update();
+    if (camera.position.distanceTo(camPos) < 0.05) done.current = true;
+  });
+  return null;
+}
+
+function Marker({ place }: { place: Place }) {
+  const ref = useRef<THREE.Mesh>(null);
+  useFrame(({ clock }) => {
+    if (!ref.current) return;
+    ref.current.position.y = place.pos[1] + 2.4 + Math.sin(clock.elapsedTime * 2) * 0.2;
+    ref.current.rotation.y = clock.elapsedTime;
+  });
+  return (
+    <mesh ref={ref} position={[place.pos[0], place.pos[1] + 2.4, place.pos[2]]} rotation-x={Math.PI}>
+      <coneGeometry args={[0.3, 0.7, 4]} />
+      <meshStandardMaterial color="#ffd700" emissive="#ffb000" emissiveIntensity={2} />
+    </mesh>
+  );
+}
 
 const store = createXRStore();
 
@@ -148,7 +188,7 @@ function Snowman({ position }: { position: [number, number, number] }) {
   );
 }
 
-function Scene() {
+function Scene({ focus }: { focus: Place | null }) {
   const houses = useMemo(() => {
     const colors = ["#b23a3a", "#2f6b4f", "#c98b3a", "#3b5a8a", "#8a4a6b", "#a85a32"];
     return Array.from({ length: 8 }, (_, i) => {
@@ -183,24 +223,70 @@ function Scene() {
       <Snowman position={[4, 0, 3]} />
       <Snowman position={[-4.5, 0, -2.5]} />
       <Snow />
-      <OrbitControls target={[0, 2, 0]} maxPolarAngle={Math.PI / 2.1} minDistance={4} maxDistance={30} />
+      {focus && <Marker place={focus} />}
+      <CameraRig focus={focus} />
+      <OrbitControls makeDefault target={[0, 2, 0]} maxPolarAngle={Math.PI / 2.1} minDistance={4} maxDistance={30} />
     </>
   );
 }
 
 export default function Village() {
   const [ready, setReady] = useState(false);
+  const plan = useServerFn(planTour);
+  const [open, setOpen] = useState(false);
+  const [wish, setWish] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [tour, setTour] = useState<{ title: string; stops: TourStop[] } | null>(null);
+  const [step, setStep] = useState(0);
+  const stop = tour?.stops[step];
+  const focus = stop ? PLACES.find((p) => p.id === stop.id) ?? null : null;
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!wish.trim() || loading) return;
+    setLoading(true); setError(null);
+    try {
+      const r = await plan({ data: { wish } });
+      if ("error" in r) setError(r.error);
+      else { setTour(r); setStep(0); }
+    } catch { setError("Le guide n'a pas pu préparer votre parcours."); }
+    finally { setLoading(false); }
+  }
   return (
     <div className="relative h-screen w-full bg-background" data-scene-ready={ready || undefined}>
       <Canvas shadows camera={{ position: [0, 2.5, 7.5], fov: 60 }} onCreated={() => setTimeout(() => setReady(true), 300)}>
         <XR store={store}>
           <XROrigin position={[0, 0, 6]} />
-          <Scene />
+          <Scene focus={focus} />
         </XR>
       </Canvas>
       <div className="pointer-events-none absolute inset-x-0 top-6 text-center">
         <h1 className="text-4xl font-bold tracking-wide text-primary-foreground drop-shadow-lg">Village de Noël</h1>
         <p className="mt-1 text-sm text-primary-foreground/80">Glissez pour tourner · Molette pour zoomer</p>
+      </div>
+      <div className="absolute right-4 top-24 w-80 max-w-[calc(100%-2rem)] rounded-2xl bg-card/90 p-4 text-card-foreground shadow-xl backdrop-blur">
+        {!open && !tour ? (
+          <button onClick={() => setOpen(true)} className="w-full rounded-full bg-primary px-4 py-2 font-semibold text-primary-foreground">✨ Mon parcours personnalisé</button>
+        ) : !tour ? (
+          <form onSubmit={submit} className="space-y-3">
+            <p className="font-semibold">Que souhaitez-vous découvrir ?</p>
+            <textarea value={wish} onChange={(e) => setWish(e.target.value)} maxLength={500} rows={3} placeholder="Ex. : des douceurs sucrées et des activités pour les enfants" className="w-full rounded-lg border border-input bg-background p-2 text-sm text-foreground" />
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <button disabled={loading || !wish.trim()} className="w-full rounded-full bg-primary px-4 py-2 font-semibold text-primary-foreground disabled:opacity-50">{loading ? "Le guide prépare votre parcours…" : "Créer mon parcours"}</button>
+          </form>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">{tour.title}</p>
+            <p className="text-lg font-bold">{step + 1}. {focus?.name}</p>
+            <p className="text-sm">{stop?.note}</p>
+            <div className="flex gap-2">
+              <button disabled={step === 0} onClick={() => setStep(step - 1)} className="flex-1 rounded-full bg-secondary px-3 py-2 text-sm font-semibold text-secondary-foreground disabled:opacity-40">Précédent</button>
+              <button disabled={step >= tour.stops.length - 1} onClick={() => setStep(step + 1)} className="flex-1 rounded-full bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-40">Suivant</button>
+            </div>
+            <p className="text-xs text-muted-foreground">Étape {step + 1} / {tour.stops.length}</p>
+            <button onClick={() => { setTour(null); setOpen(true); }} className="text-sm underline">Nouveau parcours</button>
+          </div>
+        )}
       </div>
       <div className="absolute inset-x-0 bottom-8 flex justify-center gap-3">
         <button onClick={() => store.enterVR()} className="rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-lg transition hover:scale-105">Entrer en VR</button>
