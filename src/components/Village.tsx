@@ -1,6 +1,6 @@
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Environment, Lightformer, Sky } from "@react-three/drei";
-import { XR, createXRStore } from "@react-three/xr";
+import { XR, XROrigin, createXRStore } from "@react-three/xr";
 import { useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
@@ -194,6 +194,7 @@ export default function Village() {
     <div className="relative h-screen w-full bg-background" data-scene-ready={ready || undefined}>
       <Canvas shadows camera={{ position: [0, 2.5, 7.5], fov: 60 }} onCreated={() => setTimeout(() => setReady(true), 300)}>
         <XR store={store}>
+          <XROrigin position={[0, 0, 6]} />
           <Scene />
         </XR>
       </Canvas>
