@@ -1,6 +1,9 @@
 import { QueryClient } from "@tanstack/react-query";
 import { createRouter, rootRouteId } from "@tanstack/react-router";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// Route matching must not start the browser-only XR emulator in jsdom.
+vi.mock("@/components/Village", () => ({ default: () => null }));
 
 import { routeTree } from "@/routeTree.gen";
 

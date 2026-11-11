@@ -1,0 +1,1 @@
+- Wintery loop by Emma_MA: https://opengameart.org/content/wintery-loop — CC0/public domain. Normalized and converted to MP3.

@@ -1,11 +1,13 @@
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Environment, Lightformer, Sky } from "@react-three/drei";
 import { XR, XROrigin, createXRStore } from "@react-three/xr";
-import { useMemo, useRef, useState } from "react";
+import { Suspense, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { useServerFn } from "@tanstack/react-start";
 import { PLACES, type Place } from "@/lib/village-places";
 import { planTour, type TourStop } from "@/lib/tour.functions";
+import ChristmasMusic from "./ChristmasMusic";
+import SantaSleigh from "./SantaSleigh";
 
 function CameraRig({ focus }: { focus: Place | null }) {
   const done = useRef(true);
@@ -104,7 +106,7 @@ function BigTree() {
       const h = r() * 4.2;
       const rad = (1 - h / 4.8) * 1.9;
       const a = r() * Math.PI * 2;
-      return { p: [Math.cos(a) * rad, 1 + h, Math.sin(a) * rad] as [number, number, number], c: ["#ff4040", "#ffd700", "#40a0ff", "#ffffff"][i % 4]! };
+      return { p: [Math.cos(a) * rad, 1 + h, Math.sin(a) * rad] as [number, number, number], c: ["#ff4040", "#ffd700", "#40a0ff", "#ffffff"][i % 4] ?? "#ffffff" };
     });
   }, []);
   const group = useRef<THREE.Group>(null);
@@ -148,7 +150,8 @@ function Snow({ count = 1500 }) {
   }, [count]);
   useFrame((_, d) => {
     const dt = Math.min(d, 0.05);
-    const p = ref.current!.geometry.attributes["position"] as THREE.BufferAttribute;
+    if (!ref.current) return;
+    const p = ref.current.geometry.attributes["position"] as THREE.BufferAttribute;
     for (let i = 0; i < count; i++) {
       let y = p.getY(i) - dt * 0.8;
       if (y < 0) y = 15;
@@ -193,7 +196,7 @@ function Scene({ focus }: { focus: Place | null }) {
     const colors = ["#b23a3a", "#2f6b4f", "#c98b3a", "#3b5a8a", "#8a4a6b", "#a85a32"];
     return Array.from({ length: 8 }, (_, i) => {
       const a = (i / 8) * Math.PI * 2;
-      return { p: [Math.cos(a) * 9, 0, Math.sin(a) * 9] as [number, number, number], rot: -a - Math.PI / 2, c: colors[i % colors.length]! };
+      return { p: [Math.cos(a) * 9, 0, Math.sin(a) * 9] as [number, number, number], rot: -a - Math.PI / 2, c: colors[i % colors.length] ?? colors[0] ?? "#b23a3a" };
     });
   }, []);
   const trees = useMemo(() => {
@@ -223,6 +226,7 @@ function Scene({ focus }: { focus: Place | null }) {
       <Snowman position={[4, 0, 3]} />
       <Snowman position={[-4.5, 0, -2.5]} />
       <Snow />
+      <Suspense fallback={null}><SantaSleigh stopId={focus?.id} /></Suspense>
       {focus && <Marker place={focus} />}
       <CameraRig focus={focus} />
       <OrbitControls makeDefault target={[0, 2, 0]} maxPolarAngle={Math.PI / 2.1} minDistance={4} maxDistance={30} />
@@ -253,13 +257,14 @@ export default function Village() {
     finally { setLoading(false); }
   }
   return (
-    <div className="relative h-screen w-full bg-background" data-scene-ready={ready || undefined}>
+    <div className="relative h-dvh w-full bg-background" data-scene-ready={ready || undefined}>
       <Canvas shadows camera={{ position: [0, 2.5, 7.5], fov: 60 }} onCreated={() => setTimeout(() => setReady(true), 300)}>
         <XR store={store}>
           <XROrigin position={[0, 0, 6]} />
           <Scene focus={focus} />
         </XR>
       </Canvas>
+      <ChristmasMusic />
       <div className="pointer-events-none absolute inset-x-0 top-6 text-center">
         <h1 className="text-4xl font-bold tracking-wide text-primary-foreground drop-shadow-lg">Village de Noël</h1>
         <p className="mt-1 text-sm text-primary-foreground/80">Glissez pour tourner · Molette pour zoomer</p>

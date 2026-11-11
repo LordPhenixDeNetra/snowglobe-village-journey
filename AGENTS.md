@@ -30,3 +30,6 @@ use the editor.
 <!-- LOVABLE:END -->
 
 - Village points of interest live in src/lib/village-places.ts; the AI tour server function may only return ids from that list, so keep scene and AI catalog in sync.
+- Sleigh motion is pure TypeScript in src/lib/sleigh-motion.ts; its renderer follows the active catalog stop to keep movement testable and destinations synchronized.
+- Christmas music uses one gesture-started Web Audio mixer and licensed CDN assets; no autoplay avoids browser blocking and unwanted sound.
+- Development probes: window.__sleigh.snapshot()/sim(seconds) inspect and advance live motion, and window.__christmasAudio() measures playback time, RMS and peak; these hooks do not ship in production.
