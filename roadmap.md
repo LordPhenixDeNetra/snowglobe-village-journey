@@ -1,4 +1,5 @@
 # Christmas village additions
+- [x] Extend storyteller controls and world-scale spatial audio to VR; test tracked listener movement and exit.
 - [x] Add gesture-started French AR tour narration and localized bells/fire recordings.
 - [x] Test narration lifecycle and spatial audio positions; document device checks.
 - [x] Add a licensed Christmas music loop with playback and volume controls.

@@ -51,3 +51,8 @@ Open the published HTTPS app directly, outside an embedded preview, on a browser
 5. Browser French voices differ by device; if unavailable, the app reports the failure and keeps visual navigation. Actual voice quality, stereo perception and device gesture policies cannot be verified in the sandbox.
 
 Narration text, gesture-only start, stop replacement, session exit and scaled/rotated source coordinates are automated-test verified with mocked devices. These are not real AR hardware checks.
+
+### VR storyteller and spatial ambience
+Create a tour, enter VR and use the controller ray/trigger to select **Écouter le conteur**. Next/Previous and A/B should replace narration with the active stop; **Répéter la voix** repeats it and **Couper le conteur** stops voice and ambience.
+
+Walk or teleport toward the Grand Sapin and Chalet des Contes: bells and fire remain fixed at those places while the listener follows your real tracked head position and orientation. VR attenuation uses metre-scale distances, not AR tabletop distances. Exit VR and confirm both sounds and narration stop. Use stereo headphones to check left/right direction and distance; voice availability, sound quality and spatial perception on Meta Quest remain unverified without a headset.

@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { PLACES, type Place } from "@/lib/village-places";
 import { AR_ROTATION_STEP, controllerTurn, horizontalHit, scaleForAR, VR_WORLD_SCALE, walkingTarget, walkingVelocity, walkOnGround, safeLanding, viewpoint, type GroundPosition, type WalkVelocity } from "@/lib/xr-navigation";
 import { Button } from "@/components/ui/button";
-import { useARAudio } from "@/hooks/use-ar-audio";
+import { useImmersiveAudio } from "@/hooks/use-ar-audio";
 import { Volume2, VolumeX, RotateCcw } from "lucide-react";
 
 export type ImmersiveProps = {
@@ -59,6 +59,8 @@ function VRNavigation({ focus, note, step, count, onStep, children }: ImmersiveP
   const origin = useRef<THREE.Group>(null);
   const camera = useThree(s => s.camera);
   const session = useXR(s => s.session);
+  const soundModel = useRef<THREE.Group>(null);
+  const audio = useImmersiveAudio(soundModel, !!session, focus, note, step, count, "vr");
   const [smooth, setSmooth] = useState(false);
   const [spot, setSpot] = useState(0);
   const heading = useRef<THREE.Group>(null);
@@ -147,9 +149,12 @@ function VRNavigation({ focus, note, step, count, onStep, children }: ImmersiveP
         <WorldButton label={smooth ? "Rotation fluide" : "Rotation par à-coups"} position={[-0.35, -0.25, 0]} onClick={() => setSmooth(!smooth)} />
         <WorldButton label="Point de vue suivant" position={[0.35, -0.25, 0]} onClick={() => { const next = (spot + 1) % PLACES.length; setSpot(next); const place = PLACES[next]; if (place) visit(place); }} />
         <WorldButton label="Quitter la VR" position={[0, -0.5, 0]} onClick={() => { void session?.end(); }} />
+        <WorldButton label={audio.busy ? "Chargement des sons…" : audio.enabled ? "Couper le conteur" : "Écouter le conteur"} position={[-0.35, -0.75, 0]} onClick={() => { if (audio.enabled || audio.busy) audio.stop(); else void audio.start(); }} />
+        <WorldButton label={audio.speaking ? "Le conteur parle…" : "Répéter la voix"} position={[0.35, -0.75, 0]} disabled={!audio.enabled || !focus} onClick={audio.repeat} />
+        {audio.error && <WorldButton label={audio.error} position={[0, -1, 0]} onClick={() => { void audio.start(); }} />}
       </group>
     </XROrigin>
-    {children(land)}
+    <group ref={soundModel}>{children(land)}</group>
   </>;
 }
 
@@ -172,7 +177,7 @@ function ARPlacement({ children, scale, onScale, focus, note, step, count, onSte
   const [found, setFound] = useState(false);
   const [placed, setPlaced] = useState(false);
   const placedRef = useRef(false);
-  const audio = useARAudio(soundModel, placed && !tracking, focus, note, step, count);
+  const audio = useImmersiveAudio(soundModel, placed && !tracking, focus, note, step, count);
   const world = useMemo(() => new THREE.Matrix4(), []);
   const ring = useMemo(() => new THREE.RingGeometry(0.08, 0.1, 32).rotateX(-Math.PI / 2), []);
   useEffect(() => () => ring.dispose(), [ring]);

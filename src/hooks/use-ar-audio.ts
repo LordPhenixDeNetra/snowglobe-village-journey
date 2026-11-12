@@ -8,7 +8,7 @@ import bells from "@/assets/audio/bells.mp3.asset.json";
 import fire from "@/assets/audio/fireplace.mp3.asset.json";
 
 type Sound = { source: AudioBufferSourceNode; panner: PannerNode };
-export function useARAudio(model: RefObject<THREE.Group | null>, active: boolean, focus: Place | null, note: string | undefined, step: number, count: number) {
+export function useImmersiveAudio(model: RefObject<THREE.Group | null>, active: boolean, focus: Place | null, note: string | undefined, step: number, count: number, mode: "ar" | "vr" = "ar") {
   const camera = useThree(state => state.camera);
   const [enabled, setEnabled] = useState(false);
   const [speaking, setSpeaking] = useState(false);
@@ -74,7 +74,9 @@ export function useARAudio(model: RefObject<THREE.Group | null>, active: boolean
         source.buffer = buffer; source.loop = true;
         const panner = mixer.context.createPanner();
         panner.panningModel = "HRTF"; panner.distanceModel = "inverse";
-        panner.refDistance = 0.25; panner.maxDistance = 5; panner.rolloffFactor = 1.2;
+        panner.refDistance = mode === "vr" ? 3 : 0.25;
+        panner.maxDistance = mode === "vr" ? 35 : 5;
+        panner.rolloffFactor = 1.2;
         source.connect(panner).connect(mixer.effects);
         sounds.current[index] = { source, panner };
         source.start();
@@ -82,7 +84,7 @@ export function useARAudio(model: RefObject<THREE.Group | null>, active: boolean
       setEnabled(true);
     } catch { if (request === generation.current) { stop(); setError("Les ambiances sonores sont indisponibles. Réessayez."); } }
     finally { if (request === generation.current) { starting.current = false; setBusy(false); } }
-  }, [active, enabled, repeat, stop]);
+  }, [active, enabled, repeat, stop, mode]);
   // A new stop cancels the previous sentence rather than queuing narration.
   const lastText = useRef(text);
   useEffect(() => {
@@ -116,3 +118,6 @@ export function useARAudio(model: RefObject<THREE.Group | null>, active: boolean
   });
   return { enabled, speaking, busy, error, start, stop, repeat };
 }
+
+// Compatibility alias for existing AR callers and tests.
+export const useARAudio = useImmersiveAudio;
