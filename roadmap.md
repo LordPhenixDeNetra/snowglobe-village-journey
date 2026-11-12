@@ -1,4 +1,8 @@
 # Christmas village additions
+- [x] Add Santa's AI mailbox with an animated parchment reply.
+- [x] Add five hidden gifts, a counter and a final fireworks celebration.
+- [x] Add shared interactive tree decorations for desktop, VR and AR.
+- [x] Test activity rules and verify the full visitor workflows.
 - [x] Add day/dusk/polar-night lighting, animated aurora, chimney smoke and sleigh star trail.
 - [x] Add snowfall intensity controls and verify weather rules and rendering.
 - [x] Extend storyteller controls and world-scale spatial audio to VR; test tracked listener movement and exit.

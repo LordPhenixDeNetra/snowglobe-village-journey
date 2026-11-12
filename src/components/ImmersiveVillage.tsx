@@ -9,8 +9,13 @@ import { useImmersiveAudio } from "@/hooks/use-ar-audio";
 import { Volume2, VolumeX, RotateCcw } from "lucide-react";
 import WeatherControls, { type WeatherProps } from "./WeatherControls";
 import { nextAmbience, AMBIENCE_LABELS } from "@/lib/village-weather";
+import ActivityControls, { starNames, type ActivityProps } from "./ActivityControls";
+import { nextStar, ORNAMENT_COLORS } from "@/lib/village-activities";
+import { useServerFn } from "@tanstack/react-start";
+import { writeSantaLetter } from "@/lib/santa-letter.functions";
 
 export type ImmersiveProps = WeatherProps & {
+  activities: ActivityProps;
   focus: Place | null;
   note?: string | undefined;
   step: number;
@@ -55,7 +60,7 @@ function WorldButton({ label, position, onClick, disabled = false }: {
   </mesh>;
 }
 
-function VRNavigation({ focus, note, step, count, onStep, ambience, onAmbience, snow, onSnow, children }: ImmersiveProps & {
+function VRNavigation({ focus, note, step, count, onStep, ambience, onAmbience, snow, onSnow, activities, children }: ImmersiveProps & {
   children: (teleport: (point: GroundPosition) => void) => ReactNode;
 }) {
   const origin = useRef<THREE.Group>(null);
@@ -155,6 +160,7 @@ function VRNavigation({ focus, note, step, count, onStep, ambience, onAmbience, 
         <WorldButton label={audio.speaking ? "Le conteur parle…" : "Répéter la voix"} position={[0.35, -0.75, 0]} disabled={!audio.enabled || !focus} onClick={audio.repeat} />
         <WorldButton label={AMBIENCE_LABELS[ambience]} position={[-0.35, -1, 0]} onClick={() => onAmbience(nextAmbience(ambience))} />
         <WorldButton label={`Neige · ${snow}%`} position={[0.35, -1, 0]} onClick={() => onSnow(snow >= 100 ? 0 : Math.min(100, snow + 25))} />
+        <WorldActivities activities={activities} position={[1.15, 0.4, 0]} />
         {audio.error && <WorldButton label={audio.error} position={[0, -1.25, 0]} onClick={() => { void audio.start(); }} />}
       </group>
     </XROrigin>
@@ -162,7 +168,7 @@ function VRNavigation({ focus, note, step, count, onStep, ambience, onAmbience, 
   </>;
 }
 
-function ARPlacement({ children, scale, onScale, focus, note, step, count, onStep, ambience, onAmbience, snow, onSnow }: ImmersiveProps & { children: ReactNode }) {
+function ARPlacement({ children, scale, onScale, focus, note, step, count, onStep, ambience, onAmbience, snow, onSnow, activities }: ImmersiveProps & { children: ReactNode }) {
   const session = useXR(s => s.session);
   const xrStore = useXRStore();
   const camera = useThree(s => s.camera);
@@ -256,6 +262,7 @@ function ARPlacement({ children, scale, onScale, focus, note, step, count, onSte
     </mesh>
     <group ref={model} visible={false}><group ref={soundModel} scale={scaleForAR(scale)} rotation-y={rotation}>{children}</group></group>
     {!session?.domOverlayState && <group ref={fallback}>
+      {placed && <WorldActivities activities={activities} position={[1, 0.4, -1.2]} />}
       <WorldButton label={placed ? "Repositionner" : found ? "Poser le village" : "Recherche de surface…"} position={[0, -0.25, -1.2]} disabled={!placed && !found} onClick={placed ? reposition : place} />
       {placed && <>
         <WorldButton label="− Taille" position={[-0.35, -0.5, -1.2]} onClick={() => onScale(scaleForAR(scale - 0.005))} />
@@ -273,6 +280,7 @@ function ARPlacement({ children, scale, onScale, focus, note, step, count, onSte
       <div ref={setOverlay} className="pointer-events-auto max-h-[80dvh] w-full max-w-sm space-y-3 overflow-y-auto rounded-lg bg-card/95 p-4 text-card-foreground">
         <p className="font-semibold">{tracking ? "Suivi interrompu…" : placed ? "Village de Noël · Maquette" : found ? "Surface détectée" : "Recherche d’une surface horizontale…"}</p>
         {placed ? <>
+          <ActivityControls {...activities} />
           <WeatherControls ambience={ambience} onAmbience={onAmbience} snow={snow} onSnow={onSnow} />
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="secondary" disabled={tracking} onClick={() => { if (audio.enabled || audio.busy) audio.stop(); else void audio.start(); }}><span className="flex items-center gap-2">{audio.enabled ? <VolumeX /> : <Volume2 />}{audio.busy ? "Chargement des sons…" : audio.enabled ? "Couper le conteur" : "Écouter le conteur"}</span></Button>
@@ -289,6 +297,62 @@ function ARPlacement({ children, scale, onScale, focus, note, step, count, onSte
       </div>
     </XRDomOverlay>
   </>;
+}
+
+function WorldActivities({ activities, position }: { activities: ActivityProps; position: GroundPosition }) {
+  const [color, setColor] = useState(0);
+  const currentColor = ORNAMENT_COLORS[color] ?? "red";
+  return <group position={position}>
+    <WorldButton label="Poste du Père Noël" position={[0, 0, 0]} onClick={() => activities.onActivity(activities.activity === "letter" ? null : "letter")} />
+    <WorldButton label={`Cadeaux · ${activities.found.length}/5`} position={[0, -0.25, 0]} onClick={() => { activities.onActivity("hunt"); if (!activities.hunting) activities.onHunt(); }} />
+    <WorldButton label="Décorer le sapin" position={[0, -0.5, 0]} onClick={() => activities.onActivity(activities.activity === "tree" ? null : "tree")} />
+    {activities.activity === "hunt" && <WorldButton label="Recommencer la chasse" position={[0, -0.75, 0]} onClick={activities.onHunt} />}
+    {activities.activity === "tree" && <>
+      <WorldButton label={`Couleur · ${{ red: "Rouge", blue: "Bleu", gold: "Or", green: "Vert" }[currentColor]}`} position={[0, -0.75, 0]} onClick={() => setColor(value => (value + 1) % 4)} />
+      <WorldButton label={`+ Boule · ${activities.decoration.ornaments.length}/60`} position={[0, -1, 0]} onClick={() => activities.onOrnament(currentColor)} disabled={activities.decoration.ornaments.length >= 60} />
+      <WorldButton label={`+ Guirlande · ${activities.decoration.garlands}/3`} position={[0, -1.25, 0]} onClick={activities.onGarland} disabled={activities.decoration.garlands >= 3} />
+      <WorldButton label={`Étoile · ${starNames[activities.decoration.star]}`} position={[0, -1.5, 0]} onClick={() => activities.onStar(nextStar(activities.decoration.star))} />
+      <WorldButton label="Réinitialiser le sapin" position={[0, -1.75, 0]} onClick={activities.onResetTree} />
+    </>}
+    {activities.activity === "letter" && <WorldLetter />}
+  </group>;
+}
+
+function WorldLetter() {
+  const send = useServerFn(writeSantaLetter);
+  const [letter, setLetter] = useState("");
+  const [reply, setReply] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [page, setPage] = useState(0);
+  const [texture, setTexture] = useState<THREE.CanvasTexture>();
+  const [keyboard, setKeyboard] = useState(false);
+  useEffect(() => {
+    const canvas = document.createElement("canvas"); canvas.width = 1024; canvas.height = 1024;
+    const ctx = canvas.getContext("2d"); if (!ctx) return;
+    const css = getComputedStyle(document.documentElement);
+    ctx.fillStyle = css.getPropertyValue("--parchment").trim(); ctx.fillRect(0, 0, 1024, 1024);
+    ctx.fillStyle = css.getPropertyValue("--parchment-ink").trim(); ctx.font = "40px serif";
+    const words = (reply || letter || "Cher Père Noël…").split(/\s+/); const lines: string[] = []; let line = "";
+    for (const word of words) { if (ctx.measureText(`${line} ${word}`).width > 900) { lines.push(line); line = word; } else line += `${line ? " " : ""}${word}`; } if (line) lines.push(line);
+    lines.slice(page * 16, (page + 1) * 16).forEach((text, i) => ctx.fillText(text, 60, 90 + i * 55));
+    const next = new THREE.CanvasTexture(canvas); next.colorSpace = THREE.SRGBColorSpace; setTexture(next); return () => next.dispose();
+  }, [letter, reply, page]);
+  async function submit() {
+    if (!letter.trim() || busy) return; setBusy(true); setKeyboard(false);
+    try { const result = await send({ data: { name: "", letter } }); setReply("reply" in result ? result.reply : result.error); setPage(0); }
+    catch { setReply("La Poste est momentanément indisponible. Votre lettre est conservée."); }
+    finally { setBusy(false); }
+  }
+  return <group position={[0.85, -0.4, 0]}>
+    <mesh position={[0, -0.35, 0]}><planeGeometry args={[0.95, 0.95]} /><meshBasicMaterial map={texture ?? null} toneMapped={false} /></mesh>
+    <WorldButton label={busy ? "Réponse en préparation…" : "Envoyer ma lettre"} position={[0, -0.95, 0]} disabled={busy || !letter.trim()} onClick={() => { void submit(); }} />
+    <WorldButton label="Écrire / modifier" position={[0, -1.2, 0]} onClick={() => { setReply(""); setPage(0); setKeyboard(!keyboard); }} />
+    <WorldButton label="Page suivante" position={[0, -1.45, 0]} onClick={() => setPage(value => (value + 1) % 3)} />
+    {keyboard && <group position={[0, -1.75, 0.05]}>
+      {"ABCDEFGHIJKLMNOPQRSTUVWXYZ .,!?éèà’".split("").map((key, i) => <group key={i} position={[(i % 7 - 3) * 0.15, -Math.floor(i / 7) * 0.13, 0]} scale={0.2}><WorldButton label={key === " " ? "␣" : key} position={[0, 0, 0]} onClick={() => { setLetter(value => (value + key).slice(0, 1500)); setPage(0); }} /></group>)}
+      <WorldButton label="Effacer" position={[0, -0.7, 0]} onClick={() => setLetter(value => value.slice(0, -1))} />
+    </group>}
+  </group>;
 }
 
 export default function ImmersiveVillage(props: ImmersiveProps & {

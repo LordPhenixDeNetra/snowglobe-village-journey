@@ -1,5 +1,11 @@
 # WebXR device checks
 
+## Christmas activities
+Santa letters were tested with a real AI response; gift progression and decoration rules have automated tests.
+In VR, select **Poste du Père Noël**, then **Écrire / modifier** to open the world-space alphabet keyboard; send the letter and turn its pages. On AR devices with overlays, use the normal letter form. Without overlays, the world keyboard is available.
+Select **Cadeaux**, find all five packages and aim the ray/trigger (VR) or tap (AR) to collect them. The fifth starts fireworks above the tree. Tree controls add colored ornaments, up to three garlands and three star effects.
+Actual headset keyboard targeting, ray collection and smartphone taps remain unverified without XR hardware. Activity progress is session-only and resets on reload; letters are not stored by the app.
+
 ## Verified in the sandbox
 - Fourteen tests cover ground-level viewpoints, walking, independent controller turning, horizontal AR poses, AR scale limits, sleigh motion and route matching.
 - The village renders at 759×642 and 390×844 without page errors or failed asset requests.

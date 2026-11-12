@@ -10,7 +10,7 @@ export function useWeatherColors() {
     const canvas = document.createElement("canvas"); canvas.width = 1; canvas.height = 1;
     const ctx = canvas.getContext("2d"); if (!ctx) return;
     const result: Record<string, THREE.Color> = {};
-    for (const name of ["day-sky", "dusk-sky", "night-sky", "day-light", "dusk-light", "night-light", "snow", "smoke", "gold", "aurora-green", "aurora-rose"]) {
+    for (const name of ["day-sky", "dusk-sky", "night-sky", "day-light", "dusk-light", "night-light", "snow", "smoke", "gold", "red", "blue", "green", "aurora-green", "aurora-rose"]) {
       ctx.fillStyle = css.getPropertyValue(`--scene-${name}`).trim(); ctx.fillRect(0, 0, 1, 1);
       const data = ctx.getImageData(0, 0, 1, 1).data;
       result[name] = new THREE.Color().setRGB((data[0] ?? 0) / 255, (data[1] ?? 0) / 255, (data[2] ?? 0) / 255, THREE.SRGBColorSpace);

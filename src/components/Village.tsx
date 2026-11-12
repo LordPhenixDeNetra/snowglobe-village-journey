@@ -1,4 +1,4 @@
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Environment, Lightformer } from "@react-three/drei";
 import { XR, TeleportTarget, createXRStore, useXRSessionModeSupported } from "@react-three/xr";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
@@ -14,6 +14,9 @@ import { AR_DEFAULT_SCALE, scaleForAR, safeLanding, type GroundPosition } from "
 import { ChimneySmoke, WeatherLighting } from "./VillageWeather";
 import WeatherControls from "./WeatherControls";
 import { snowfall, type Ambience } from "@/lib/village-weather";
+import ActivityControls, { type Activity, type ActivityProps } from "./ActivityControls";
+import VillageActivities, { TreeDecorations } from "./VillageActivities";
+import { addGarland, addOrnament, collectGift, GIFTS, INITIAL_DECORATION, type Decoration } from "@/lib/village-activities";
 
 function CameraRig({ focus }: { focus: Place | null }) {
   const done = useRef(true);
@@ -34,6 +37,26 @@ function CameraRig({ focus }: { focus: Place | null }) {
     c.update();
     if (camera.position.distanceTo(camPos) < 0.05) done.current = true;
   });
+  return null;
+}
+
+declare global {
+  interface Window { __villageActivities?: { viewGift: (index: number) => void; overview: () => void }; }
+}
+function ActivityProbe({ mode }: { mode: string }) {
+  const { camera, controls } = useThree();
+  useEffect(() => {
+    if (!import.meta.env.DEV || mode !== "desktop") return;
+    const c = controls as unknown as { target: THREE.Vector3; update: () => void } | null;
+    window.__villageActivities = {
+      viewGift: index => {
+        const gift = GIFTS[index]; if (!gift || !c) return;
+        const [x, , z] = gift.pos; camera.position.set(x + 3, 2.5, z + 3); c.target.set(x, 0.4, z); c.update();
+      },
+      overview: () => { camera.position.set(0, 14, 23); c?.target.set(0, 5, 0); c?.update(); },
+    };
+    return () => { delete window.__villageActivities; };
+  }, [camera, controls, mode]);
   return null;
 }
 
@@ -112,7 +135,7 @@ function Tree({ position, scale = 1 }: { position: [number, number, number]; sca
   );
 }
 
-function BigTree() {
+function BigTree({ activities }: { activities: ActivityProps }) {
   const lights = useMemo(() => {
     const r = rand(7);
     return Array.from({ length: 60 }, (_, i) => {
@@ -130,7 +153,7 @@ function BigTree() {
     });
   });
   return (
-    <group>
+    <group onClick={event => { event.stopPropagation(); activities.onActivity("tree"); }}>
       <Tree position={[0, 0, 0]} scale={2.6} />
       <group ref={group}>
         {lights.map((l, i) => (
@@ -140,10 +163,7 @@ function BigTree() {
           </mesh>
         ))}
       </group>
-      <mesh position={[0, 6.6, 0]}>
-        <octahedronGeometry args={[0.35]} />
-        <meshStandardMaterial color="#ffd700" emissive="#ffc400" emissiveIntensity={2} />
-      </mesh>
+      <TreeDecorations decoration={activities.decoration} />
       <pointLight position={[0, 4, 0]} intensity={8} distance={10} color="#ffcf80" />
     </group>
   );
@@ -207,7 +227,7 @@ function Snowman({ position }: { position: [number, number, number] }) {
   );
 }
 
-function Scene({ focus, mode, teleport, ambience, snow }: { focus: Place | null; mode: "desktop" | "vr" | "ar"; teleport?: ((point: GroundPosition) => void) | undefined; ambience: Ambience; snow: number }) {
+function Scene({ focus, mode, teleport, ambience, snow, activities, onCollect }: { focus: Place | null; mode: "desktop" | "vr" | "ar"; teleport?: ((point: GroundPosition) => void) | undefined; ambience: Ambience; snow: number; activities: ActivityProps; onCollect: (id: string) => void }) {
   const houses = useMemo(() => {
     const colors = ["#b23a3a", "#2f6b4f", "#c98b3a", "#3b5a8a", "#8a4a6b", "#a85a32"];
     return Array.from({ length: 8 }, (_, i) => {
@@ -239,7 +259,10 @@ function Scene({ focus, mode, teleport, ambience, snow }: { focus: Place | null;
         <ringGeometry args={[2.8, 12, 64]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh></TeleportTarget>}
-      <BigTree />
+      <BigTree activities={activities} />
+      <VillageActivities props={activities} onCollect={onCollect} />
+      <Tree position={[-11.3, 0, -3]} scale={1.4} />
+      <Tree position={[2.5, 0, -11.3]} scale={1.4} />
       {houses.map((h, i) => <House key={i} position={h.p} rot={h.rot} color={h.c} />)}
       {trees.map((t, i) => <Tree key={i} position={t.p} scale={t.s} />)}
       <Snowman position={[4, 0, 3]} />
@@ -249,6 +272,7 @@ function Scene({ focus, mode, teleport, ambience, snow }: { focus: Place | null;
       {focus && <Marker place={focus} />}
       {mode === "desktop" && <><CameraRig focus={focus} />
       <OrbitControls makeDefault target={[0, 2, 0]} maxPolarAngle={Math.PI / 2.1} minDistance={4} maxDistance={30} /></>}
+      <ActivityProbe mode={mode} />
     </>
   );
 }
@@ -270,6 +294,22 @@ export default function Village() {
   const [entering, setEntering] = useState(false);
   const [arScale, setArScale] = useState(AR_DEFAULT_SCALE);
   const [immersed, setImmersed] = useState(false);
+  const [activity, setActivity] = useState<Activity>(null);
+  const [found, setFound] = useState<string[]>([]);
+  const [hunting, setHunting] = useState(false);
+  const [decoration, setDecoration] = useState<Decoration>(INITIAL_DECORATION);
+  const [activityFocus, setActivityFocus] = useState<Place | null>(null);
+  const activities: ActivityProps = {
+    activity, onActivity: value => {
+      setActivity(value);
+      setActivityFocus(value === "letter" ? PLACES.find(place => place.id === "poste-pere-noel") ?? null : value === "tree" ? PLACES[0] ?? null : null);
+    }, found, hunting,
+    onHunt: () => { setFound([]); setHunting(true); setActivityFocus(null); },
+    decoration, onOrnament: color => setDecoration(current => addOrnament(current, color)),
+    onGarland: () => setDecoration(addGarland), onStar: star => setDecoration(current => ({ ...current, star })),
+    onResetTree: () => setDecoration(INITIAL_DECORATION),
+  };
+  function collect(id: string) { setFound(current => collectGift(current, id)); }
   useEffect(() => store.subscribe(state => setImmersed(!!state.session)), []);
   async function enter(mode: "VR" | "AR") {
     setXrError(null); setEntering(true);
@@ -284,7 +324,7 @@ export default function Village() {
     finally { setEntering(false); }
   }
   const stop = tour?.stops[step];
-  const focus = stop ? PLACES.find((p) => p.id === stop.id) ?? null : null;
+  const focus = activityFocus ?? (stop ? PLACES.find((p) => p.id === stop.id) ?? null : null);
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!wish.trim() || loading) return;
@@ -292,7 +332,7 @@ export default function Village() {
     try {
       const r = await plan({ data: { wish } });
       if ("error" in r) setError(r.error);
-      else { setTour(r); setStep(0); }
+      else { setTour(r); setStep(0); setActivityFocus(null); setActivity(null); }
     } catch { setError("Le guide n'a pas pu préparer votre parcours."); }
     finally { setLoading(false); }
   }
@@ -300,11 +340,11 @@ export default function Village() {
     <div className="relative h-dvh w-full bg-background" data-scene-ready={ready || undefined}>
       <Canvas shadows camera={{ position: [0, 2.5, 7.5], fov: 60, near: 0.01 }} onCreated={() => setTimeout(() => setReady(true), 300)}>
         <XR store={store}>
-          <ImmersiveVillage focus={focus} note={stop?.note} step={step} count={tour?.stops.length ?? 0}
-            onStep={direction => setStep(current => Math.max(0, Math.min((tour?.stops.length ?? 1) - 1, current + direction)))}
+          <ImmersiveVillage focus={focus} note={activityFocus ? undefined : stop?.note} step={step} count={tour?.stops.length ?? 0} activities={activities}
+            onStep={direction => { setActivityFocus(null); setStep(current => Math.max(0, Math.min((tour?.stops.length ?? 1) - 1, current + direction))); }}
             scale={arScale} onScale={value => setArScale(scaleForAR(value))}
             ambience={ambience} onAmbience={setAmbience} snow={snow} onSnow={setSnow}
-            renderScene={(mode, teleport) => <Scene focus={focus} mode={mode} teleport={teleport} ambience={ambience} snow={snow} />} />
+            renderScene={(mode, teleport) => <Scene focus={focus} mode={mode} teleport={teleport} ambience={ambience} snow={snow} activities={activities} onCollect={collect} />} />
         </XR>
       </Canvas>
       <div className={immersed ? "hidden" : "contents"}><ChristmasMusic /></div>
@@ -314,6 +354,8 @@ export default function Village() {
       </div>
       <div className="absolute right-4 top-24 max-h-[calc(100dvh-14rem)] w-80 max-w-[calc(100%-2rem)] overflow-y-auto rounded-lg bg-card/90 p-4 text-card-foreground shadow-xl backdrop-blur">
         <div className="mb-3 border-b border-border pb-3"><WeatherControls ambience={ambience} onAmbience={setAmbience} snow={snow} onSnow={setSnow} /></div>
+        <div className="mb-3 border-b border-border pb-3"><ActivityControls {...activities} /></div>
+        {hunting && activity !== "hunt" && <p role="status" className="mb-3 text-sm font-semibold">🎁 {found.length} / 5 cadeaux retrouvés</p>}
         {!open && !tour ? (
           <Button onClick={() => setOpen(true)} className="w-full">✨ Mon parcours personnalisé</Button>
         ) : !tour ? (
@@ -329,8 +371,8 @@ export default function Village() {
             <p className="text-lg font-bold">{step + 1}. {focus?.name}</p>
             <p className="text-sm">{stop?.note}</p>
             <div className="flex gap-2">
-              <Button variant="secondary" disabled={step === 0} onClick={() => setStep(step - 1)} className="flex-1">Précédent</Button>
-              <Button disabled={step >= tour.stops.length - 1} onClick={() => setStep(step + 1)} className="flex-1">Suivant</Button>
+              <Button variant="secondary" disabled={step === 0} onClick={() => { setActivityFocus(null); setStep(step - 1); }} className="flex-1">Précédent</Button>
+              <Button disabled={step >= tour.stops.length - 1} onClick={() => { setActivityFocus(null); setStep(step + 1); }} className="flex-1">Suivant</Button>
             </div>
             <p className="text-xs text-muted-foreground">Étape {step + 1} / {tour.stops.length}</p>
             <Button variant="link" onClick={() => { setTour(null); setOpen(true); }}>Nouveau parcours</Button>

@@ -42,3 +42,7 @@ use the editor.
 - Immersive audio sources use catalog positions transformed by the scene group (scaled/rotated miniature in AR, world-fixed metre scale in VR); listener pose follows the tracked camera for HRTF spatialization and mode-specific attenuation.
 - Weather state is shared across desktop/VR/AR, with pure village-weather rules and global CSS scene color tokens; AR never draws a sky over the camera feed.
 - Chimney smoke and moving-sleigh stars use bounded instanced particles outside React state; polar aurora is a local animated shader with no remote sky dependency.
+- Activity rules and the five-gift catalog live in village-activities; session-only activity state is shared by desktop, VR and AR to avoid divergent counts and decorations.
+- Santa letter generation runs only in a validated server function; never persist visitor letters or log their contents, and treat them as untrusted prompt data.
+- New activity scene colors use global scene tokens; fireworks use a bounded instanced pool and ornaments/garlands have device-safe caps.
+- Development-only __villageActivities.viewGift(index)/overview() controls the camera for render checks; it never collects gifts or bypasses progression.
