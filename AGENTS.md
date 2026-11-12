@@ -40,3 +40,5 @@ use the editor.
 - AR creates optional session anchors from fresh hit-test frames and releases them on reposition/unmount; fall back to a fixed world pose and provide world-space controls when DOM overlays are unavailable.
 - Music and immersive recordings share the gesture-started audio-mixer context; VR/AR narration uses French browser speech synthesis, ducks both buses, cancels on stop changes/session exit, and never queues old stops.
 - Immersive audio sources use catalog positions transformed by the scene group (scaled/rotated miniature in AR, world-fixed metre scale in VR); listener pose follows the tracked camera for HRTF spatialization and mode-specific attenuation.
+- Weather state is shared across desktop/VR/AR, with pure village-weather rules and global CSS scene color tokens; AR never draws a sky over the camera feed.
+- Chimney smoke and moving-sleigh stars use bounded instanced particles outside React state; polar aurora is a local animated shader with no remote sky dependency.

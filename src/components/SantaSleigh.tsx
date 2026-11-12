@@ -4,6 +4,7 @@ import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import sleighAsset from "@/assets/models/santa-sleigh.glb.asset.json";
 import { SLEIGH_HOME, SLEIGH_TRAVEL_SECONDS, sleighDestination, sleighPosition, type SleighPosition } from "@/lib/sleigh-motion";
+import { SleighStars } from "./VillageWeather";
 
 declare global {
   interface Window {
@@ -55,5 +56,5 @@ export default function SantaSleigh({ stopId }: { stopId: string | undefined }) 
     return () => { delete window.__sleigh; };
   }, []);
   useFrame((_, delta) => advance(Math.min(delta, 0.05)));
-  return <group ref={group} position={SLEIGH_HOME}><primitive object={model} /></group>;
+  return <><group ref={group} position={SLEIGH_HOME}><primitive object={model} /></group><SleighStars position={() => motion.current.position} moving={() => motion.current.progress < 1 && Math.hypot(motion.current.to[0] - motion.current.from[0], motion.current.to[2] - motion.current.from[2]) > 0.1} /></>;
 }

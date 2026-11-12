@@ -1,4 +1,6 @@
 # Christmas village additions
+- [x] Add day/dusk/polar-night lighting, animated aurora, chimney smoke and sleigh star trail.
+- [x] Add snowfall intensity controls and verify weather rules and rendering.
 - [x] Extend storyteller controls and world-scale spatial audio to VR; test tracked listener movement and exit.
 - [x] Add gesture-started French AR tour narration and localized bells/fire recordings.
 - [x] Test narration lifecycle and spatial audio positions; document device checks.

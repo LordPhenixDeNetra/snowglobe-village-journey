@@ -7,8 +7,10 @@ import { AR_ROTATION_STEP, controllerTurn, horizontalHit, scaleForAR, VR_WORLD_S
 import { Button } from "@/components/ui/button";
 import { useImmersiveAudio } from "@/hooks/use-ar-audio";
 import { Volume2, VolumeX, RotateCcw } from "lucide-react";
+import WeatherControls, { type WeatherProps } from "./WeatherControls";
+import { nextAmbience, AMBIENCE_LABELS } from "@/lib/village-weather";
 
-export type ImmersiveProps = {
+export type ImmersiveProps = WeatherProps & {
   focus: Place | null;
   note?: string | undefined;
   step: number;
@@ -53,7 +55,7 @@ function WorldButton({ label, position, onClick, disabled = false }: {
   </mesh>;
 }
 
-function VRNavigation({ focus, note, step, count, onStep, children }: ImmersiveProps & {
+function VRNavigation({ focus, note, step, count, onStep, ambience, onAmbience, snow, onSnow, children }: ImmersiveProps & {
   children: (teleport: (point: GroundPosition) => void) => ReactNode;
 }) {
   const origin = useRef<THREE.Group>(null);
@@ -151,14 +153,16 @@ function VRNavigation({ focus, note, step, count, onStep, children }: ImmersiveP
         <WorldButton label="Quitter la VR" position={[0, -0.5, 0]} onClick={() => { void session?.end(); }} />
         <WorldButton label={audio.busy ? "Chargement des sons…" : audio.enabled ? "Couper le conteur" : "Écouter le conteur"} position={[-0.35, -0.75, 0]} onClick={() => { if (audio.enabled || audio.busy) audio.stop(); else void audio.start(); }} />
         <WorldButton label={audio.speaking ? "Le conteur parle…" : "Répéter la voix"} position={[0.35, -0.75, 0]} disabled={!audio.enabled || !focus} onClick={audio.repeat} />
-        {audio.error && <WorldButton label={audio.error} position={[0, -1, 0]} onClick={() => { void audio.start(); }} />}
+        <WorldButton label={AMBIENCE_LABELS[ambience]} position={[-0.35, -1, 0]} onClick={() => onAmbience(nextAmbience(ambience))} />
+        <WorldButton label={`Neige · ${snow}%`} position={[0.35, -1, 0]} onClick={() => onSnow(snow >= 100 ? 0 : Math.min(100, snow + 25))} />
+        {audio.error && <WorldButton label={audio.error} position={[0, -1.25, 0]} onClick={() => { void audio.start(); }} />}
       </group>
     </XROrigin>
     <group ref={soundModel}>{children(land)}</group>
   </>;
 }
 
-function ARPlacement({ children, scale, onScale, focus, note, step, count, onStep }: ImmersiveProps & { children: ReactNode }) {
+function ARPlacement({ children, scale, onScale, focus, note, step, count, onStep, ambience, onAmbience, snow, onSnow }: ImmersiveProps & { children: ReactNode }) {
   const session = useXR(s => s.session);
   const xrStore = useXRStore();
   const camera = useThree(s => s.camera);
@@ -260,6 +264,7 @@ function ARPlacement({ children, scale, onScale, focus, note, step, count, onSte
         {focus && <><WorldButton label="Précédent" position={[-0.35, 0, -1.2]} disabled={step === 0} onClick={() => onStep(-1)} /><WorldButton label="Suivant" position={[0.35, 0, -1.2]} disabled={step === count - 1} onClick={() => onStep(1)} /></>}
       </>}
       <WorldButton label="Quitter l’AR" position={[0, 0.25, -1.2]} onClick={() => { void session?.end(); }} />
+      {placed && <><WorldButton label={AMBIENCE_LABELS[ambience]} position={[-0.35, -1, -1.2]} onClick={() => onAmbience(nextAmbience(ambience))} /><WorldButton label={`Neige · ${snow}%`} position={[0.35, -1, -1.2]} onClick={() => onSnow(snow >= 100 ? 0 : Math.min(100, snow + 25))} /></>}
       {placed && <><WorldButton label={audio.enabled || audio.busy ? "Couper le conteur" : "Écouter le conteur"} position={[0, 0.5, -1.2]} onClick={() => { if (audio.enabled || audio.busy) audio.stop(); else void audio.start(); }} />
         {audio.enabled && focus && <WorldButton label="Répéter la voix" position={[0, 0.75, -1.2]} onClick={audio.repeat} />}
         {audio.error && <WorldButton label={audio.error} position={[0, 1, -1.2]} onClick={() => { void audio.start(); }} />}</>}
@@ -268,6 +273,7 @@ function ARPlacement({ children, scale, onScale, focus, note, step, count, onSte
       <div ref={setOverlay} className="pointer-events-auto max-h-[80dvh] w-full max-w-sm space-y-3 overflow-y-auto rounded-lg bg-card/95 p-4 text-card-foreground">
         <p className="font-semibold">{tracking ? "Suivi interrompu…" : placed ? "Village de Noël · Maquette" : found ? "Surface détectée" : "Recherche d’une surface horizontale…"}</p>
         {placed ? <>
+          <WeatherControls ambience={ambience} onAmbience={onAmbience} snow={snow} onSnow={onSnow} />
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="secondary" disabled={tracking} onClick={() => { if (audio.enabled || audio.busy) audio.stop(); else void audio.start(); }}><span className="flex items-center gap-2">{audio.enabled ? <VolumeX /> : <Volume2 />}{audio.busy ? "Chargement des sons…" : audio.enabled ? "Couper le conteur" : "Écouter le conteur"}</span></Button>
             <Button variant="outline" size="icon" disabled={!audio.enabled || !focus} onClick={audio.repeat} aria-label="Répéter la narration" title="Répéter la narration"><RotateCcw /></Button>

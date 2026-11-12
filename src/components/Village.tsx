@@ -1,5 +1,5 @@
 import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, Environment, Lightformer, Sky } from "@react-three/drei";
+import { OrbitControls, Environment, Lightformer } from "@react-three/drei";
 import { XR, TeleportTarget, createXRStore, useXRSessionModeSupported } from "@react-three/xr";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
@@ -11,6 +11,9 @@ import SantaSleigh from "./SantaSleigh";
 import ImmersiveVillage from "./ImmersiveVillage";
 import { Button } from "@/components/ui/button";
 import { AR_DEFAULT_SCALE, scaleForAR, safeLanding, type GroundPosition } from "@/lib/xr-navigation";
+import { ChimneySmoke, WeatherLighting } from "./VillageWeather";
+import WeatherControls from "./WeatherControls";
+import { snowfall, type Ambience } from "@/lib/village-weather";
 
 function CameraRig({ focus }: { focus: Place | null }) {
   const done = useRef(true);
@@ -87,6 +90,7 @@ function House({ position, color, rot }: { position: [number, number, number]; c
         <boxGeometry args={[0.3, 0.7, 0.3]} />
         <meshStandardMaterial color="#8a3b2e" />
       </mesh>
+      <ChimneySmoke />
     </group>
   );
 }
@@ -145,7 +149,8 @@ function BigTree() {
   );
 }
 
-function Snow({ count = 1500 }) {
+function Snow({ intensity }: { intensity: number }) {
+  const { count, speed, wind } = snowfall(intensity);
   const ref = useRef<THREE.Points>(null);
   const positions = useMemo(() => {
     const r = rand(3);
@@ -162,10 +167,12 @@ function Snow({ count = 1500 }) {
     if (!ref.current) return;
     const p = ref.current.geometry.attributes["position"] as THREE.BufferAttribute;
     for (let i = 0; i < count; i++) {
-      let y = p.getY(i) - dt * 0.8;
+      let y = p.getY(i) - dt * speed;
       if (y < 0) y = 15;
       p.setY(i, y);
-      p.setX(i, p.getX(i) + Math.sin(y + i) * dt * 0.1);
+      let x = p.getX(i) + (Math.sin(y + i) * 0.1 + wind) * dt;
+      if (x > 20) x = -20;
+      p.setX(i, x);
     }
     p.needsUpdate = true;
   });
@@ -200,7 +207,7 @@ function Snowman({ position }: { position: [number, number, number] }) {
   );
 }
 
-function Scene({ focus, mode, teleport }: { focus: Place | null; mode: "desktop" | "vr" | "ar"; teleport?: ((point: GroundPosition) => void) | undefined }) {
+function Scene({ focus, mode, teleport, ambience, snow }: { focus: Place | null; mode: "desktop" | "vr" | "ar"; teleport?: ((point: GroundPosition) => void) | undefined; ambience: Ambience; snow: number }) {
   const houses = useMemo(() => {
     const colors = ["#b23a3a", "#2f6b4f", "#c98b3a", "#3b5a8a", "#8a4a6b", "#a85a32"];
     return Array.from({ length: 8 }, (_, i) => {
@@ -217,11 +224,7 @@ function Scene({ focus, mode, teleport }: { focus: Place | null; mode: "desktop"
   }, []);
   return (
     <>
-      {mode !== "ar" && <><color attach="background" args={["#1b2a44"]} />
-      <fog attach="fog" args={["#1b2a44", 15, 40]} />
-      <Sky distance={450} sunPosition={[0, -0.05, -1]} turbidity={8} rayleigh={0.5} /></>}
-      <ambientLight intensity={0.35} color="#9fb6e0" />
-      <directionalLight position={[10, 15, 5]} intensity={0.8} color="#c8d8ff" castShadow shadow-mapSize={[2048, 2048]} shadow-camera-left={-20} shadow-camera-right={20} shadow-camera-top={20} shadow-camera-bottom={-20} />
+      <WeatherLighting ambience={ambience} ar={mode === "ar"} />
       <Environment>
         <Lightformer intensity={1} position={[0, 5, 0]} scale={[10, 10, 1]} color="#aac" />
       </Environment>
@@ -241,7 +244,7 @@ function Scene({ focus, mode, teleport }: { focus: Place | null; mode: "desktop"
       {trees.map((t, i) => <Tree key={i} position={t.p} scale={t.s} />)}
       <Snowman position={[4, 0, 3]} />
       <Snowman position={[-4.5, 0, -2.5]} />
-      <Snow />
+      <Snow intensity={snow} />
       <Suspense fallback={null}><SantaSleigh stopId={focus?.id} /></Suspense>
       {focus && <Marker place={focus} />}
       {mode === "desktop" && <><CameraRig focus={focus} />
@@ -252,6 +255,8 @@ function Scene({ focus, mode, teleport }: { focus: Place | null; mode: "desktop"
 
 export default function Village() {
   const [ready, setReady] = useState(false);
+  const [ambience, setAmbience] = useState<Ambience>("dusk");
+  const [snow, setSnow] = useState(30);
   const plan = useServerFn(planTour);
   const [open, setOpen] = useState(false);
   const [wish, setWish] = useState("");
@@ -298,7 +303,8 @@ export default function Village() {
           <ImmersiveVillage focus={focus} note={stop?.note} step={step} count={tour?.stops.length ?? 0}
             onStep={direction => setStep(current => Math.max(0, Math.min((tour?.stops.length ?? 1) - 1, current + direction)))}
             scale={arScale} onScale={value => setArScale(scaleForAR(value))}
-            renderScene={(mode, teleport) => <Scene focus={focus} mode={mode} teleport={teleport} />} />
+            ambience={ambience} onAmbience={setAmbience} snow={snow} onSnow={setSnow}
+            renderScene={(mode, teleport) => <Scene focus={focus} mode={mode} teleport={teleport} ambience={ambience} snow={snow} />} />
         </XR>
       </Canvas>
       <div className={immersed ? "hidden" : "contents"}><ChristmasMusic /></div>
@@ -307,6 +313,7 @@ export default function Village() {
         <h1 className="text-4xl font-bold tracking-wide text-primary-foreground drop-shadow-lg">Village de Noël</h1>
       </div>
       <div className="absolute right-4 top-24 max-h-[calc(100dvh-14rem)] w-80 max-w-[calc(100%-2rem)] overflow-y-auto rounded-lg bg-card/90 p-4 text-card-foreground shadow-xl backdrop-blur">
+        <div className="mb-3 border-b border-border pb-3"><WeatherControls ambience={ambience} onAmbience={setAmbience} snow={snow} onSnow={setSnow} /></div>
         {!open && !tour ? (
           <Button onClick={() => setOpen(true)} className="w-full">✨ Mon parcours personnalisé</Button>
         ) : !tour ? (
