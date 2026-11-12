@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { XROrigin, XRDomOverlay, useXR, useXRStore, useXRHitTest, useXRControllerLocomotion } from "@react-three/xr";
+import { XROrigin, XRDomOverlay, useXR, useXRStore, useXRHitTest, useXRControllerButtonEvent } from "@react-three/xr";
 import * as THREE from "three";
 import { PLACES, type Place } from "@/lib/village-places";
-import { SNAP_DEGREES, VR_WORLD_SCALE, WALK_MAX_DELTA, walkingTarget, walkingVelocity, walkOnGround, safeLanding, viewpoint, type GroundPosition, type WalkVelocity } from "@/lib/xr-navigation";
+import { AR_ROTATION_STEP, controllerTurn, horizontalHit, scaleForAR, VR_WORLD_SCALE, walkingTarget, walkingVelocity, walkOnGround, safeLanding, viewpoint, type GroundPosition, type WalkVelocity } from "@/lib/xr-navigation";
 import { Button } from "@/components/ui/button";
 
 export type ImmersiveProps = {
@@ -15,6 +15,12 @@ export type ImmersiveProps = {
   scale: number;
   onScale: (scale: number) => void;
 };
+
+function pulse(session: XRSession | undefined) {
+  const input = Array.from(session?.inputSources ?? []).find(source => source.gamepad?.hapticActuators?.length);
+  const actuator = input?.gamepad?.hapticActuators?.[0];
+  if (actuator) void actuator.pulse(0.25, 35).catch(() => {});
+}
 
 // Canvas-backed labels avoid a remote font request inside the headset.
 function WorldButton({ label, position, onClick, disabled = false }: {
@@ -59,6 +65,11 @@ function VRNavigation({ focus, note, step, count, onStep, children }: ImmersiveP
   const lastFacing = useRef<WalkVelocity>({ x: 0, z: -1 });
   const headPosition = useMemo(() => new THREE.Vector3(), []);
   const headDirection = useMemo(() => new THREE.Vector3(), []);
+  const turnArmed = useRef(true);
+  const right = useXR(state => state.inputSourceStates.find(input => input.type === "controller" && input.inputSource.handedness === "right"));
+  const rightController = right?.type === "controller" ? right : undefined;
+  useXRControllerButtonEvent(rightController, "a-button", state => { if (state === "pressed" && count && step < count - 1) { onStep(1); pulse(session); } });
+  useXRControllerButtonEvent(rightController, "b-button", state => { if (state === "pressed" && count && step > 0) { onStep(-1); pulse(session); } });
   function turn(angle: number) {
     const group = origin.current;
     if (!group) return;
@@ -70,14 +81,11 @@ function VRNavigation({ focus, note, step, count, onStep, children }: ImmersiveP
     group.position.x += x - headPosition.x;
     group.position.z += z - headPosition.z;
   }
-  useXRControllerLocomotion((_, angle, delta) => {
-    // The library reports a per-frame angle; cap smooth turning after a stalled frame.
-    turn(smooth ? -angle * Math.min(delta, WALK_MAX_DELTA) / Math.max(delta, 0.001) : angle);
-  }, false, smooth ? { type: "smooth", speed: 1 } : { type: "snap", degrees: SNAP_DEGREES });
 
   function land(point: GroundPosition) {
     if (!origin.current || !safeLanding(point[0], point[2])) return;
     velocity.current = { x: 0, z: 0 };
+    pulse(session);
     const head = camera.getWorldPosition(new THREE.Vector3());
     const feet = origin.current.getWorldPosition(new THREE.Vector3());
     origin.current.position.x += point[0] - head.x;
@@ -103,6 +111,11 @@ function VRNavigation({ focus, note, step, count, onStep, children }: ImmersiveP
   useEffect(() => { if (focus) visit(focus); }, [focus?.id]);
   useFrame((_, delta) => {
     if (!heading.current || !origin.current) return;
+    const rotationController = xrStore.getState().inputSourceStates.find(input => input.type === "controller" && input.inputSource.handedness === "right");
+    const rotationStick = rotationController?.type === "controller" ? rotationController.gamepad["xr-standard-thumbstick"] : undefined;
+    const rotation = controllerTurn(rotationStick?.xAxis ?? 0, smooth, turnArmed.current, delta);
+    turnArmed.current = rotation.armed;
+    if (rotation.angle) turn(rotation.angle);
     const controller = xrStore.getState().inputSourceStates.find(input => input.type === "controller" && input.inputSource.handedness === "left");
     const stick = controller?.type === "controller" ? controller.gamepad["xr-standard-thumbstick"] : undefined;
     camera.getWorldDirection(headDirection);
@@ -140,8 +153,16 @@ function VRNavigation({ focus, note, step, count, onStep, children }: ImmersiveP
 
 function ARPlacement({ children, scale, onScale, focus, step, count, onStep }: ImmersiveProps & { children: ReactNode }) {
   const session = useXR(s => s.session);
+  const xrStore = useXRStore();
+  const camera = useThree(s => s.camera);
+  const fallback = useRef<THREE.Group>(null);
+  const anchor = useRef<XRAnchor | null>(null);
+  const generation = useRef(0);
+  const pendingPlace = useRef(false);
+  const [rotation, setRotation] = useState(0);
+  const [tracking, setTracking] = useState(false);
   const model = useRef<THREE.Group>(null);
-  const overlay = useRef<HTMLDivElement>(null);
+  const [overlay, setOverlay] = useState<HTMLDivElement | null>(null);
   const reticle = useRef<THREE.Mesh>(null);
   const candidate = useRef(new THREE.Matrix4());
   const valid = useRef(false);
@@ -151,34 +172,65 @@ function ARPlacement({ children, scale, onScale, focus, step, count, onStep }: I
   const world = useMemo(() => new THREE.Matrix4(), []);
   const ring = useMemo(() => new THREE.RingGeometry(0.08, 0.1, 32).rotateX(-Math.PI / 2), []);
   useEffect(() => () => ring.dispose(), [ring]);
+  useEffect(() => () => { generation.current++; anchor.current?.delete(); anchor.current = null; }, []);
   useEffect(() => {
-    const element = overlay.current;
+    const element = overlay;
     if (!element) return;
     const block = (event: Event) => event.preventDefault();
     element.addEventListener("beforexrselect", block);
     return () => element.removeEventListener("beforexrselect", block);
-  }, []);
+  }, [overlay]);
   useXRHitTest((results, getWorldMatrix) => {
     if (placedRef.current) return;
     const result = results[0];
     valid.current = !!result && getWorldMatrix(world, result);
     // Only horizontal surfaces are suitable for the miniature village.
-    if (valid.current && (world.elements[5] ?? 0) < 0.9) valid.current = false;
+    if (valid.current && !horizontalHit(world.elements)) valid.current = false;
     if (valid.current) candidate.current.copy(world);
     setFound(previous => previous === valid.current ? previous : valid.current);
     if (reticle.current) {
       reticle.current.visible = valid.current;
       reticle.current.matrix.copy(candidate.current);
     }
+    if (pendingPlace.current && valid.current && result && model.current) {
+      pendingPlace.current = false;
+      model.current.position.setFromMatrixPosition(candidate.current);
+      model.current.visible = true;
+      placedRef.current = true;
+      setPlaced(true);
+      if (reticle.current) reticle.current.visible = false;
+      const request = generation.current;
+      // Anchors are optional; a fixed session-world pose remains usable if unavailable.
+      if (result.createAnchor) void result.createAnchor().then(next => {
+        if (request !== generation.current) { next.delete(); return; }
+        anchor.current = next;
+      }).catch(() => {});
+    }
   }, "viewer", "plane");
   function place() {
     if (!valid.current || placedRef.current || !model.current) return;
-    model.current.position.setFromMatrixPosition(candidate.current);
-    model.current.visible = true;
-    placedRef.current = true;
-    setPlaced(true);
-    if (reticle.current) reticle.current.visible = false;
+    pendingPlace.current = true;
   }
+  function reposition() {
+    generation.current++;
+    anchor.current?.delete(); anchor.current = null;
+    pendingPlace.current = false; placedRef.current = false; valid.current = false;
+    setPlaced(false); setFound(false); setTracking(false);
+    if (model.current) model.current.visible = false;
+  }
+  useFrame((_, __, frame) => {
+    const reference = xrStore.getState().originReferenceSpace;
+    if (anchor.current && frame && reference && model.current) {
+      const pose = frame.getPose(anchor.current.anchorSpace, reference);
+      if (pose) model.current.position.set(pose.transform.position.x, pose.transform.position.y, pose.transform.position.z);
+      model.current.visible = !!pose;
+      setTracking(previous => previous === !pose ? previous : !pose);
+    }
+    if (fallback.current) {
+      camera.getWorldPosition(fallback.current.position);
+      fallback.current.quaternion.copy(camera.getWorldQuaternion(new THREE.Quaternion()));
+    }
+  });
   useEffect(() => {
     if (!session) return;
     session.addEventListener("select", place);
@@ -189,14 +241,25 @@ function ARPlacement({ children, scale, onScale, focus, step, count, onStep }: I
     <mesh ref={reticle} geometry={ring} matrixAutoUpdate={false} visible={false} onClick={place}>
       <meshBasicMaterial color="gold" side={THREE.DoubleSide} />
     </mesh>
-    <group ref={model} visible={false} scale={scale}>{children}</group>
+    <group ref={model} visible={false}><group scale={scaleForAR(scale)} rotation-y={rotation}>{children}</group></group>
+    {!session?.domOverlayState && <group ref={fallback}>
+      <WorldButton label={placed ? "Repositionner" : found ? "Poser le village" : "Recherche de surface…"} position={[0, -0.25, -1.2]} disabled={!placed && !found} onClick={placed ? reposition : place} />
+      {placed && <>
+        <WorldButton label="− Taille" position={[-0.35, -0.5, -1.2]} onClick={() => onScale(scaleForAR(scale - 0.005))} />
+        <WorldButton label="+ Taille" position={[0.35, -0.5, -1.2]} onClick={() => onScale(scaleForAR(scale + 0.005))} />
+        <WorldButton label="Tourner" position={[0, -0.75, -1.2]} onClick={() => setRotation(value => value + AR_ROTATION_STEP)} />
+        {focus && <><WorldButton label="Précédent" position={[-0.35, 0, -1.2]} disabled={step === 0} onClick={() => onStep(-1)} /><WorldButton label="Suivant" position={[0.35, 0, -1.2]} disabled={step === count - 1} onClick={() => onStep(1)} /></>}
+      </>}
+      <WorldButton label="Quitter l’AR" position={[0, 0.25, -1.2]} onClick={() => { void session?.end(); }} />
+    </group>}
     <XRDomOverlay className="pointer-events-none fixed inset-0 flex items-end justify-center p-4">
-      <div ref={overlay} className="pointer-events-auto w-full max-w-sm space-y-3 rounded-lg bg-card/95 p-4 text-card-foreground">
-        <p className="font-semibold">{placed ? "Village de Noël · Maquette" : found ? "Surface détectée" : "Recherche d’une surface horizontale…"}</p>
+      <div ref={setOverlay} className="pointer-events-auto max-h-[80dvh] w-full max-w-sm space-y-3 overflow-y-auto rounded-lg bg-card/95 p-4 text-card-foreground">
+        <p className="font-semibold">{tracking ? "Suivi interrompu…" : placed ? "Village de Noël · Maquette" : found ? "Surface détectée" : "Recherche d’une surface horizontale…"}</p>
         {placed ? <>
           <label className="block text-sm">Taille de la maquette<input aria-label="Taille de la maquette" type="range" min="0.015" max="0.05" step="0.001" value={scale} onChange={e => onScale(Number(e.target.value))} className="mt-2 w-full accent-primary" /></label>
+          <label className="block text-sm">Orientation<input aria-label="Orientation de la maquette" type="range" min="0" max="360" step="5" value={(rotation * 180 / Math.PI) % 360} onChange={e => setRotation(Number(e.target.value) * Math.PI / 180)} className="mt-2 w-full accent-primary" /></label>
           {focus && <><p className="text-sm">{step + 1}/{count} · {focus.name}</p><div className="flex gap-2"><Button disabled={step === 0} onClick={() => onStep(-1)}>Précédent</Button><Button disabled={step === count - 1} onClick={() => onStep(1)}>Suivant</Button></div></>}
-          <Button variant="secondary" onClick={() => { placedRef.current = false; valid.current = false; setPlaced(false); setFound(false); if (model.current) model.current.visible = false; }}>Repositionner</Button>
+          <Button variant="secondary" onClick={reposition}>Repositionner</Button>
         </> : <Button disabled={!found} onClick={place}>Poser le village</Button>}
         <Button variant="outline" className="ml-2" onClick={() => { void session?.end(); }}>Quitter l’AR</Button>
       </div>

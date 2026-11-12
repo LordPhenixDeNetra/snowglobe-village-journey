@@ -4,6 +4,9 @@
 - [x] Test movement and verify the scene and audio playback.
 
 # WebXR immersion
+- [x] Strengthen VR controller input, physical tour buttons and feedback.
+- [x] Complete AR anchor tracking, rotation, resizing and fallback placement controls.
+- [x] Verify rules and rendering; document real-device limitations.
 - [x] Add gentle, collision-safe, ground-level VR walking while preserving tracked eye height and real-world scale.
 - [x] Test VR walking rules and document headset checks.
 - [x] Add safe ground teleportation and quick village viewpoints in VR.

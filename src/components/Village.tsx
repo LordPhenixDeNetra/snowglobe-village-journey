@@ -51,8 +51,10 @@ function Marker({ place }: { place: Place }) {
 
 const store = createXRStore({
   emulate: false, offerSession: false, enterGrantedSession: false,
-  controller: { teleportPointer: true }, hand: { teleportPointer: true },
-  hitTest: true, domOverlay: true,
+  controller: { model: true, rayPointer: true, grabPointer: true, teleportPointer: true },
+  hand: { rayPointer: true, touchPointer: true, teleportPointer: true },
+  screenInput: true, transientPointer: true,
+  hitTest: true, anchors: true, domOverlay: true,
 });
 
 function rand(seed: number) {
@@ -269,6 +271,10 @@ export default function Village() {
     try {
       const session = mode === "VR" ? await store.enterVR() : await store.enterAR();
       if (!session) setXrError("Impossible d’ouvrir ce mode sur cet appareil.");
+      else if (mode === "AR" && session.enabledFeatures && !session.enabledFeatures.includes("hit-test")) {
+        await session.end();
+        setXrError("Ce navigateur ne permet pas de placer le village sur une surface. Ouvrez-le dans un navigateur compatible WebXR AR.");
+      }
     } catch { setXrError("L’immersion n’a pas démarré. Vérifiez les autorisations et votre appareil WebXR."); }
     finally { setEntering(false); }
   }
@@ -287,7 +293,7 @@ export default function Village() {
   }
   return (
     <div className="relative h-dvh w-full bg-background" data-scene-ready={ready || undefined}>
-      <Canvas shadows camera={{ position: [0, 2.5, 7.5], fov: 60 }} onCreated={() => setTimeout(() => setReady(true), 300)}>
+      <Canvas shadows camera={{ position: [0, 2.5, 7.5], fov: 60, near: 0.01 }} onCreated={() => setTimeout(() => setReady(true), 300)}>
         <XR store={store}>
           <ImmersiveVillage focus={focus} note={stop?.note} step={step} count={tour?.stops.length ?? 0}
             onStep={direction => setStep(current => Math.max(0, Math.min((tour?.stops.length ?? 1) - 1, current + direction)))}

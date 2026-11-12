@@ -1,7 +1,7 @@
 # WebXR device checks
 
 ## Verified in the sandbox
-- Eight tests pass: ground-level viewpoints, unsafe teleport rejection, AR scale limits, sleigh motion and route matching.
+- Fourteen tests cover ground-level viewpoints, walking, independent controller turning, horizontal AR poses, AR scale limits, sleigh motion and route matching.
 - The village renders at 759×642 and 390×844 without page errors or failed asset requests.
 - A real AI tour for chocolate and letters to Santa generates three stops; Next advances to the post office.
 - Unsupported VR/AR modes are disabled rather than throwing an error.
@@ -17,6 +17,8 @@ Open the published HTTPS app directly in a WebXR-compatible headset browser. Cre
 3. Select **Point de vue suivant**, then **Suivant** and **Précédent**. The viewpoint and sleigh destination should follow the selected place.
 4. Turn your head: the world must stay stable and the controls remain in front of you.
 5. Select **Quitter la VR** and confirm the desktop village returns.
+6. With a tour active, press the right controller's A/B buttons for next/previous stops where those buttons exist. Controller rays and triggers select the world buttons on other layouts; optional vibration confirms tour-button actions and teleportation.
+7. Disconnect the left controller: the right thumbstick must still rotate. Reconnect the left controller and verify walking resumes.
 
 ### Ground walking in VR
 The village uses one world unit per metre; the floor-relative headset pose supplies the visitor's real eye height, without a forced camera offset or head bob.
@@ -33,8 +35,10 @@ Open the published HTTPS app directly in a browser with immersive WebXR AR and h
 
 1. Allow camera access and scan a well-lit table. A horizontal placement ring should appear.
 2. Tap the ring or **Poser le village**. The miniature should stay fixed to that location without a sky obscuring the camera view.
-3. Adjust **Taille de la maquette**, select **Repositionner**, and place it elsewhere.
+3. Adjust **Taille de la maquette** and **Orientation**, select **Repositionner**, and place it elsewhere.
 4. A pre-created tour should retain Next/Previous controls on devices supporting DOM overlays.
 5. Select **Quitter l’AR** or use the browser's session exit.
 
-AR placement uses a fixed XR world position from the horizontal hit test, not a persistent cross-session anchor. Devices without DOM overlays can tap/select to place but may not expose resizing and tour controls. Tracking stability, performance, audio continuity and device input need these device checks.
+AR placement requests a session anchor when supported and falls back to a fixed XR world position otherwise; it is not a persistent cross-session save. Anchored models hide while their pose is unavailable and return when tracking recovers. Devices without DOM overlays receive world-space placement, resizing, rotation, tour and exit controls. Check that overlay taps never also place the village. Snow, lights and the tour sleigh continue animating after placement; activate music before entering immersion if desired.
+
+Open the published HTTPS app directly, outside an embedded preview, on a browser supporting immersive WebXR. A smartphone camera alone is not enough: browsers without immersive AR/hit-test cannot place this interactive village (including many iPhone browsers). Tracking stability, performance, audio continuity, controller models and device input still require these hardware checks.

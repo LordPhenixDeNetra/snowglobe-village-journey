@@ -1,8 +1,26 @@
 import { describe, expect, it } from "vitest";
 import { PLACES } from "@/lib/village-places";
-import { safeLanding, viewpoint, scaleForAR, walkingTarget, walkingVelocity, walkOnGround, WALK_SPEED, VR_WORLD_SCALE } from "@/lib/xr-navigation";
+import { safeLanding, viewpoint, scaleForAR, walkingTarget, walkingVelocity, walkOnGround, WALK_SPEED, VR_WORLD_SCALE, controllerTurn, horizontalHit } from "@/lib/xr-navigation";
 
 describe("immersive navigation", () => {
+  it("turns with the right controller alone and rearms a 30-degree snap on release", () => {
+    expect(controllerTurn(1, false, true, 0.016).angle).toBeCloseTo(-Math.PI / 6);
+    expect(controllerTurn(1, false, false, 0.016)).toEqual({ angle: 0, armed: false });
+    expect(controllerTurn(0, false, false, 0.016)).toEqual({ angle: 0, armed: true });
+    expect(controllerTurn(-1, false, true, 0.016).angle).toBeCloseTo(Math.PI / 6);
+  });
+  it("keeps smooth right-stick turning consistent and caps stalled frames", () => {
+    expect(controllerTurn(1, true, true, 1).angle).toBe(-0.05);
+    expect(controllerTurn(-1, true, true, 0.02).angle).toBe(0.02);
+    expect(controllerTurn(0.1, true, true, 0.02).angle).toBe(0);
+  });
+  it("places AR only on finite horizontal surface poses", () => {
+    const pose = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0.4, 0.8, -1, 1];
+    expect(horizontalHit(pose)).toBe(true);
+    expect(horizontalHit(pose.map((value, index) => index === 5 ? 0 : value))).toBe(false);
+    expect(horizontalHit(pose.map((value, index) => index === 12 ? NaN : value))).toBe(false);
+    expect(horizontalHit([])).toBe(false);
+  });
   it("walks forward and sideways relative to the headset at real-world scale", () => {
     expect(VR_WORLD_SCALE).toBe(1);
     expect(walkingTarget(0, -1, { x: 0, z: -1 })).toEqual({ x: 0, z: -WALK_SPEED });

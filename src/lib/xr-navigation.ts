@@ -8,6 +8,17 @@ export const VR_WORLD_SCALE = 1;
 export const WALK_SPEED = 1.2;
 export const WALK_RESPONSE = 8;
 export const WALK_MAX_DELTA = 0.05;
+export const AR_ROTATION_STEP = Math.PI / 12;
+
+export function horizontalHit(matrix: readonly number[]): boolean {
+  return matrix.length === 16 && matrix.every(Number.isFinite) && (matrix[5] ?? 0) >= 0.9;
+}
+
+export function controllerTurn(axis: number, smooth: boolean, armed: boolean, delta: number): { angle: number; armed: boolean } {
+  if (!Number.isFinite(axis) || Math.abs(axis) < 0.5) return { angle: 0, armed: true };
+  const dt = Math.max(0, Math.min(Number.isFinite(delta) ? delta : 0, WALK_MAX_DELTA));
+  return { angle: smooth ? -Math.sign(axis) * dt : armed ? -Math.sign(axis) * SNAP_DEGREES * Math.PI / 180 : 0, armed: smooth ? true : false };
+}
 
 export type WalkVelocity = { x: number; z: number };
 
