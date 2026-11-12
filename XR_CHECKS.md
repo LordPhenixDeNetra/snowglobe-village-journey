@@ -42,3 +42,12 @@ Open the published HTTPS app directly in a browser with immersive WebXR AR and h
 AR placement requests a session anchor when supported and falls back to a fixed XR world position otherwise; it is not a persistent cross-session save. Anchored models hide while their pose is unavailable and return when tracking recovers. Devices without DOM overlays receive world-space placement, resizing, rotation, tour and exit controls. Check that overlay taps never also place the village. Snow, lights and the tour sleigh continue animating after placement; activate music before entering immersion if desired.
 
 Open the published HTTPS app directly, outside an embedded preview, on a browser supporting immersive WebXR. A smartphone camera alone is not enough: browsers without immersive AR/hit-test cannot place this interactive village (including many iPhone browsers). Tracking stability, performance, audio continuity, controller models and device input still require these hardware checks.
+
+### AR storyteller and spatial ambience
+1. Create a personalized tour, enter AR and place the village, then tap **Écouter le conteur**. There is no automatic audio before this gesture.
+2. The voice reads the current stop in French. Tap Next/Previous: the previous sentence must stop and the new stop should be narrated. **Répéter la narration** replays only the active stop.
+3. With stereo headphones, move around the table: bells are at the Grand Sapin and crackling wood at the Chalet des Contes. Resize/rotate the miniature: sources must stay attached to their places.
+4. Music and ambience should become quieter during speech. **Couper le conteur**, repositioning, lost tracking or leaving AR stops narration and ambience.
+5. Browser French voices differ by device; if unavailable, the app reports the failure and keeps visual navigation. Actual voice quality, stereo perception and device gesture policies cannot be verified in the sandbox.
+
+Narration text, gesture-only start, stop replacement, session exit and scaled/rotated source coordinates are automated-test verified with mocked devices. These are not real AR hardware checks.

@@ -5,6 +5,8 @@ import * as THREE from "three";
 import { PLACES, type Place } from "@/lib/village-places";
 import { AR_ROTATION_STEP, controllerTurn, horizontalHit, scaleForAR, VR_WORLD_SCALE, walkingTarget, walkingVelocity, walkOnGround, safeLanding, viewpoint, type GroundPosition, type WalkVelocity } from "@/lib/xr-navigation";
 import { Button } from "@/components/ui/button";
+import { useARAudio } from "@/hooks/use-ar-audio";
+import { Volume2, VolumeX, RotateCcw } from "lucide-react";
 
 export type ImmersiveProps = {
   focus: Place | null;
@@ -151,7 +153,7 @@ function VRNavigation({ focus, note, step, count, onStep, children }: ImmersiveP
   </>;
 }
 
-function ARPlacement({ children, scale, onScale, focus, step, count, onStep }: ImmersiveProps & { children: ReactNode }) {
+function ARPlacement({ children, scale, onScale, focus, note, step, count, onStep }: ImmersiveProps & { children: ReactNode }) {
   const session = useXR(s => s.session);
   const xrStore = useXRStore();
   const camera = useThree(s => s.camera);
@@ -162,6 +164,7 @@ function ARPlacement({ children, scale, onScale, focus, step, count, onStep }: I
   const [rotation, setRotation] = useState(0);
   const [tracking, setTracking] = useState(false);
   const model = useRef<THREE.Group>(null);
+  const soundModel = useRef<THREE.Group>(null);
   const [overlay, setOverlay] = useState<HTMLDivElement | null>(null);
   const reticle = useRef<THREE.Mesh>(null);
   const candidate = useRef(new THREE.Matrix4());
@@ -169,6 +172,7 @@ function ARPlacement({ children, scale, onScale, focus, step, count, onStep }: I
   const [found, setFound] = useState(false);
   const [placed, setPlaced] = useState(false);
   const placedRef = useRef(false);
+  const audio = useARAudio(soundModel, placed && !tracking, focus, note, step, count);
   const world = useMemo(() => new THREE.Matrix4(), []);
   const ring = useMemo(() => new THREE.RingGeometry(0.08, 0.1, 32).rotateX(-Math.PI / 2), []);
   useEffect(() => () => ring.dispose(), [ring]);
@@ -241,7 +245,7 @@ function ARPlacement({ children, scale, onScale, focus, step, count, onStep }: I
     <mesh ref={reticle} geometry={ring} matrixAutoUpdate={false} visible={false} onClick={place}>
       <meshBasicMaterial color="gold" side={THREE.DoubleSide} />
     </mesh>
-    <group ref={model} visible={false}><group scale={scaleForAR(scale)} rotation-y={rotation}>{children}</group></group>
+    <group ref={model} visible={false}><group ref={soundModel} scale={scaleForAR(scale)} rotation-y={rotation}>{children}</group></group>
     {!session?.domOverlayState && <group ref={fallback}>
       <WorldButton label={placed ? "Repositionner" : found ? "Poser le village" : "Recherche de surface…"} position={[0, -0.25, -1.2]} disabled={!placed && !found} onClick={placed ? reposition : place} />
       {placed && <>
@@ -251,11 +255,20 @@ function ARPlacement({ children, scale, onScale, focus, step, count, onStep }: I
         {focus && <><WorldButton label="Précédent" position={[-0.35, 0, -1.2]} disabled={step === 0} onClick={() => onStep(-1)} /><WorldButton label="Suivant" position={[0.35, 0, -1.2]} disabled={step === count - 1} onClick={() => onStep(1)} /></>}
       </>}
       <WorldButton label="Quitter l’AR" position={[0, 0.25, -1.2]} onClick={() => { void session?.end(); }} />
+      {placed && <><WorldButton label={audio.enabled || audio.busy ? "Couper le conteur" : "Écouter le conteur"} position={[0, 0.5, -1.2]} onClick={() => { if (audio.enabled || audio.busy) audio.stop(); else void audio.start(); }} />
+        {audio.enabled && focus && <WorldButton label="Répéter la voix" position={[0, 0.75, -1.2]} onClick={audio.repeat} />}
+        {audio.error && <WorldButton label={audio.error} position={[0, 1, -1.2]} onClick={() => { void audio.start(); }} />}</>}
     </group>}
     <XRDomOverlay className="pointer-events-none fixed inset-0 flex items-end justify-center p-4">
       <div ref={setOverlay} className="pointer-events-auto max-h-[80dvh] w-full max-w-sm space-y-3 overflow-y-auto rounded-lg bg-card/95 p-4 text-card-foreground">
         <p className="font-semibold">{tracking ? "Suivi interrompu…" : placed ? "Village de Noël · Maquette" : found ? "Surface détectée" : "Recherche d’une surface horizontale…"}</p>
         {placed ? <>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="secondary" disabled={tracking} onClick={() => { if (audio.enabled || audio.busy) audio.stop(); else void audio.start(); }}><span className="flex items-center gap-2">{audio.enabled ? <VolumeX /> : <Volume2 />}{audio.busy ? "Chargement des sons…" : audio.enabled ? "Couper le conteur" : "Écouter le conteur"}</span></Button>
+            <Button variant="outline" size="icon" disabled={!audio.enabled || !focus} onClick={audio.repeat} aria-label="Répéter la narration" title="Répéter la narration"><RotateCcw /></Button>
+            {audio.speaking && <span className="text-xs text-muted-foreground" aria-live="polite">Le conteur parle…</span>}
+          </div>
+          {audio.error && <p role="alert" className="text-sm text-destructive">{audio.error}</p>}
           <label className="block text-sm">Taille de la maquette<input aria-label="Taille de la maquette" type="range" min="0.015" max="0.05" step="0.001" value={scale} onChange={e => onScale(Number(e.target.value))} className="mt-2 w-full accent-primary" /></label>
           <label className="block text-sm">Orientation<input aria-label="Orientation de la maquette" type="range" min="0" max="360" step="5" value={(rotation * 180 / Math.PI) % 360} onChange={e => setRotation(Number(e.target.value) * Math.PI / 180)} className="mt-2 w-full accent-primary" /></label>
           {focus && <><p className="text-sm">{step + 1}/{count} · {focus.name}</p><div className="flex gap-2"><Button disabled={step === 0} onClick={() => onStep(-1)}>Précédent</Button><Button disabled={step === count - 1} onClick={() => onStep(1)}>Suivant</Button></div></>}

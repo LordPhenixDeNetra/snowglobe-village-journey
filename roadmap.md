@@ -1,4 +1,6 @@
 # Christmas village additions
+- [x] Add gesture-started French AR tour narration and localized bells/fire recordings.
+- [x] Test narration lifecycle and spatial audio positions; document device checks.
 - [x] Add a licensed Christmas music loop with playback and volume controls.
 - [x] Add an animated Santa sleigh following the personalized tour.
 - [x] Test movement and verify the scene and audio playback.

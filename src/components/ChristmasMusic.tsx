@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Music2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import musicAsset from "@/assets/audio/christmas-music.mp3.asset.json";
+import { getVillageMixer, setMusicVolume } from "@/lib/audio-mixer";
 
 declare global {
   interface Window {
@@ -34,7 +35,6 @@ export default function ChristmasMusic() {
     return () => {
       document.removeEventListener("visibilitychange", pauseWhenHidden);
       audio.current?.pause();
-      void mixer.current?.context.close();
       delete window.__christmasAudio;
     };
   }, []);
@@ -46,14 +46,13 @@ export default function ChristmasMusic() {
     setError(false);
     try {
       if (!mixer.current) {
-        const context = new AudioContext();
+        const shared = getVillageMixer();
+        const context = shared.context;
         const source = context.createMediaElementSource(element);
-        const gain = context.createGain();
-        const limiter = context.createDynamicsCompressor();
-        const analyser = context.createAnalyser();
-        analyser.fftSize = 1024;
-        source.connect(gain).connect(limiter).connect(analyser).connect(context.destination);
-        gain.gain.setValueAtTime(volume / 100, context.currentTime);
+        const gain = shared.music;
+        const analyser = shared.analyser;
+        source.connect(gain);
+        setMusicVolume(volume / 100);
         mixer.current = { context, gain, analyser };
       }
       await mixer.current.context.resume();
@@ -76,8 +75,7 @@ export default function ChristmasMusic() {
           onChange={(e) => {
             const value = Number(e.target.value);
             setVolume(value);
-            const current = mixer.current;
-            if (current) current.gain.gain.setTargetAtTime(value / 100, current.context.currentTime, 0.05);
+            setMusicVolume(value / 100);
           }} />
       </label>
       {error && <span role="alert" className="text-xs text-destructive">Musique indisponible, réessayez.</span>}
