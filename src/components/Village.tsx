@@ -1,13 +1,16 @@
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Environment, Lightformer, Sky } from "@react-three/drei";
-import { XR, XROrigin, createXRStore } from "@react-three/xr";
-import { Suspense, useMemo, useRef, useState } from "react";
+import { XR, TeleportTarget, createXRStore, useXRSessionModeSupported } from "@react-three/xr";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { useServerFn } from "@tanstack/react-start";
 import { PLACES, type Place } from "@/lib/village-places";
 import { planTour, type TourStop } from "@/lib/tour.functions";
 import ChristmasMusic from "./ChristmasMusic";
 import SantaSleigh from "./SantaSleigh";
+import ImmersiveVillage from "./ImmersiveVillage";
+import { Button } from "@/components/ui/button";
+import { AR_DEFAULT_SCALE, scaleForAR, safeLanding, type GroundPosition } from "@/lib/xr-navigation";
 
 function CameraRig({ focus }: { focus: Place | null }) {
   const done = useRef(true);
@@ -46,7 +49,11 @@ function Marker({ place }: { place: Place }) {
   );
 }
 
-const store = createXRStore();
+const store = createXRStore({
+  emulate: false, offerSession: false, enterGrantedSession: false,
+  controller: { teleportPointer: true }, hand: { teleportPointer: true },
+  hitTest: true, domOverlay: true,
+});
 
 function rand(seed: number) {
   let s = seed;
@@ -191,7 +198,7 @@ function Snowman({ position }: { position: [number, number, number] }) {
   );
 }
 
-function Scene({ focus }: { focus: Place | null }) {
+function Scene({ focus, mode, teleport }: { focus: Place | null; mode: "desktop" | "vr" | "ar"; teleport?: ((point: GroundPosition) => void) | undefined }) {
   const houses = useMemo(() => {
     const colors = ["#b23a3a", "#2f6b4f", "#c98b3a", "#3b5a8a", "#8a4a6b", "#a85a32"];
     return Array.from({ length: 8 }, (_, i) => {
@@ -208,18 +215,25 @@ function Scene({ focus }: { focus: Place | null }) {
   }, []);
   return (
     <>
-      <color attach="background" args={["#1b2a44"]} />
+      {mode !== "ar" && <><color attach="background" args={["#1b2a44"]} />
       <fog attach="fog" args={["#1b2a44", 15, 40]} />
-      <Sky distance={450} sunPosition={[0, -0.05, -1]} turbidity={8} rayleigh={0.5} />
+      <Sky distance={450} sunPosition={[0, -0.05, -1]} turbidity={8} rayleigh={0.5} /></>}
       <ambientLight intensity={0.35} color="#9fb6e0" />
       <directionalLight position={[10, 15, 5]} intensity={0.8} color="#c8d8ff" castShadow shadow-mapSize={[2048, 2048]} shadow-camera-left={-20} shadow-camera-right={20} shadow-camera-top={20} shadow-camera-bottom={-20} />
       <Environment>
         <Lightformer intensity={1} position={[0, 5, 0]} scale={[10, 10, 1]} color="#aac" />
       </Environment>
       <mesh rotation-x={-Math.PI / 2} receiveShadow>
-        <circleGeometry args={[40, 64]} />
+        <circleGeometry args={[mode === "ar" ? 23 : 40, 64]} />
         <meshStandardMaterial color="#e8eef7" roughness={1} />
       </mesh>
+      {mode === "vr" && <TeleportTarget onTeleport={(_, event) => {
+        const point = event.point;
+        if (safeLanding(point.x, point.z)) teleport?.([point.x, 0, point.z]);
+      }}><mesh rotation-x={-Math.PI / 2} position-y={0.01}>
+        <ringGeometry args={[2.8, 12, 64]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+      </mesh></TeleportTarget>}
       <BigTree />
       {houses.map((h, i) => <House key={i} position={h.p} rot={h.rot} color={h.c} />)}
       {trees.map((t, i) => <Tree key={i} position={t.p} scale={t.s} />)}
@@ -228,8 +242,8 @@ function Scene({ focus }: { focus: Place | null }) {
       <Snow />
       <Suspense fallback={null}><SantaSleigh stopId={focus?.id} /></Suspense>
       {focus && <Marker place={focus} />}
-      <CameraRig focus={focus} />
-      <OrbitControls makeDefault target={[0, 2, 0]} maxPolarAngle={Math.PI / 2.1} minDistance={4} maxDistance={30} />
+      {mode === "desktop" && <><CameraRig focus={focus} />
+      <OrbitControls makeDefault target={[0, 2, 0]} maxPolarAngle={Math.PI / 2.1} minDistance={4} maxDistance={30} /></>}
     </>
   );
 }
@@ -243,6 +257,21 @@ export default function Village() {
   const [error, setError] = useState<string | null>(null);
   const [tour, setTour] = useState<{ title: string; stops: TourStop[] } | null>(null);
   const [step, setStep] = useState(0);
+  const vrSupported = useXRSessionModeSupported("immersive-vr");
+  const arSupported = useXRSessionModeSupported("immersive-ar");
+  const [xrError, setXrError] = useState<string | null>(null);
+  const [entering, setEntering] = useState(false);
+  const [arScale, setArScale] = useState(AR_DEFAULT_SCALE);
+  const [immersed, setImmersed] = useState(false);
+  useEffect(() => store.subscribe(state => setImmersed(!!state.session)), []);
+  async function enter(mode: "VR" | "AR") {
+    setXrError(null); setEntering(true);
+    try {
+      const session = mode === "VR" ? await store.enterVR() : await store.enterAR();
+      if (!session) setXrError("Impossible d’ouvrir ce mode sur cet appareil.");
+    } catch { setXrError("L’immersion n’a pas démarré. Vérifiez les autorisations et votre appareil WebXR."); }
+    finally { setEntering(false); }
+  }
   const stop = tour?.stops[step];
   const focus = stop ? PLACES.find((p) => p.id === stop.id) ?? null : null;
   async function submit(e: React.FormEvent) {
@@ -260,24 +289,26 @@ export default function Village() {
     <div className="relative h-dvh w-full bg-background" data-scene-ready={ready || undefined}>
       <Canvas shadows camera={{ position: [0, 2.5, 7.5], fov: 60 }} onCreated={() => setTimeout(() => setReady(true), 300)}>
         <XR store={store}>
-          <XROrigin position={[0, 0, 6]} />
-          <Scene focus={focus} />
+          <ImmersiveVillage focus={focus} note={stop?.note} step={step} count={tour?.stops.length ?? 0}
+            onStep={direction => setStep(current => Math.max(0, Math.min((tour?.stops.length ?? 1) - 1, current + direction)))}
+            scale={arScale} onScale={value => setArScale(scaleForAR(value))}
+            renderScene={(mode, teleport) => <Scene focus={focus} mode={mode} teleport={teleport} />} />
         </XR>
       </Canvas>
-      <ChristmasMusic />
+      <div className={immersed ? "hidden" : "contents"}><ChristmasMusic /></div>
+      {!immersed && <>
       <div className="pointer-events-none absolute inset-x-0 top-6 text-center">
         <h1 className="text-4xl font-bold tracking-wide text-primary-foreground drop-shadow-lg">Village de Noël</h1>
-        <p className="mt-1 text-sm text-primary-foreground/80">Glissez pour tourner · Molette pour zoomer</p>
       </div>
-      <div className="absolute right-4 top-24 w-80 max-w-[calc(100%-2rem)] rounded-2xl bg-card/90 p-4 text-card-foreground shadow-xl backdrop-blur">
+      <div className="absolute right-4 top-24 max-h-[calc(100dvh-14rem)] w-80 max-w-[calc(100%-2rem)] overflow-y-auto rounded-lg bg-card/90 p-4 text-card-foreground shadow-xl backdrop-blur">
         {!open && !tour ? (
-          <button onClick={() => setOpen(true)} className="w-full rounded-full bg-primary px-4 py-2 font-semibold text-primary-foreground">✨ Mon parcours personnalisé</button>
+          <Button onClick={() => setOpen(true)} className="w-full">✨ Mon parcours personnalisé</Button>
         ) : !tour ? (
           <form onSubmit={submit} className="space-y-3">
             <p className="font-semibold">Que souhaitez-vous découvrir ?</p>
             <textarea value={wish} onChange={(e) => setWish(e.target.value)} maxLength={500} rows={3} placeholder="Ex. : des douceurs sucrées et des activités pour les enfants" className="w-full rounded-lg border border-input bg-background p-2 text-sm text-foreground" />
             {error && <p className="text-sm text-destructive">{error}</p>}
-            <button disabled={loading || !wish.trim()} className="w-full rounded-full bg-primary px-4 py-2 font-semibold text-primary-foreground disabled:opacity-50">{loading ? "Le guide prépare votre parcours…" : "Créer mon parcours"}</button>
+            <Button type="submit" disabled={loading || !wish.trim()} className="h-auto min-h-9 w-full whitespace-normal">{loading ? "Le guide prépare votre parcours…" : "Créer mon parcours"}</Button>
           </form>
         ) : (
           <div className="space-y-3">
@@ -285,18 +316,22 @@ export default function Village() {
             <p className="text-lg font-bold">{step + 1}. {focus?.name}</p>
             <p className="text-sm">{stop?.note}</p>
             <div className="flex gap-2">
-              <button disabled={step === 0} onClick={() => setStep(step - 1)} className="flex-1 rounded-full bg-secondary px-3 py-2 text-sm font-semibold text-secondary-foreground disabled:opacity-40">Précédent</button>
-              <button disabled={step >= tour.stops.length - 1} onClick={() => setStep(step + 1)} className="flex-1 rounded-full bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-40">Suivant</button>
+              <Button variant="secondary" disabled={step === 0} onClick={() => setStep(step - 1)} className="flex-1">Précédent</Button>
+              <Button disabled={step >= tour.stops.length - 1} onClick={() => setStep(step + 1)} className="flex-1">Suivant</Button>
             </div>
             <p className="text-xs text-muted-foreground">Étape {step + 1} / {tour.stops.length}</p>
-            <button onClick={() => { setTour(null); setOpen(true); }} className="text-sm underline">Nouveau parcours</button>
+            <Button variant="link" onClick={() => { setTour(null); setOpen(true); }}>Nouveau parcours</Button>
           </div>
         )}
       </div>
-      <div className="absolute inset-x-0 bottom-8 flex justify-center gap-3">
-        <button onClick={() => store.enterVR()} className="rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-lg transition hover:scale-105">Entrer en VR</button>
-        <button onClick={() => store.enterAR()} className="rounded-full bg-secondary px-6 py-3 font-semibold text-secondary-foreground shadow-lg transition hover:scale-105">Entrer en AR</button>
+      <div className="absolute inset-x-0 bottom-6 flex flex-col items-center gap-2 px-4">
+        {xrError && <p role="alert" className="max-w-md rounded-md bg-card p-2 text-center text-sm text-destructive">{xrError}</p>}
+        <div className="flex gap-3">
+          <Button disabled={entering || !vrSupported} onClick={() => enter("VR")} size="lg">{vrSupported === undefined ? "Vérification VR…" : vrSupported ? "Entrer en VR" : "VR indisponible"}</Button>
+          <Button disabled={entering || !arSupported} onClick={() => enter("AR")} variant="secondary" size="lg">{arSupported === undefined ? "Vérification AR…" : arSupported ? "Entrer en AR" : "AR indisponible"}</Button>
+        </div>
       </div>
+      </>}
     </div>
   );
 }

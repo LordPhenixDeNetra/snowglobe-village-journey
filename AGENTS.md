@@ -33,3 +33,5 @@ use the editor.
 - Sleigh motion is pure TypeScript in src/lib/sleigh-motion.ts; its renderer follows the active catalog stop to keep movement testable and destinations synchronized.
 - Christmas music uses one gesture-started Web Audio mixer and licensed CDN assets; no autoplay avoids browser blocking and unwanted sound.
 - Development probes: window.__sleigh.snapshot()/sim(seconds) inspect and advance live motion, and window.__christmasAudio() measures playback time, RMS and peak; these hooks do not ship in production.
+- ImmersiveVillage owns session-specific origins, locomotion, headset controls and AR hit-test placement; desktop camera controls must never run inside XR sessions to avoid overriding tracked head poses.
+- Ground destinations and AR scale constraints live in pure xr-navigation helpers with tests so teleport safety and catalog viewpoints stay synchronized.
