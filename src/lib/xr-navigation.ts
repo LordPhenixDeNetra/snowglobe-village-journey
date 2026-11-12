@@ -3,6 +3,39 @@ import { PLACES, type Place } from "./village-places";
 export type GroundPosition = [number, number, number];
 export const AR_DEFAULT_SCALE = 0.025;
 export const SNAP_DEGREES = 30;
+// World units are metres in VR; AR alone scales the village down.
+export const VR_WORLD_SCALE = 1;
+export const WALK_SPEED = 1.2;
+export const WALK_RESPONSE = 8;
+export const WALK_MAX_DELTA = 0.05;
+
+export type WalkVelocity = { x: number; z: number };
+
+export function walkingTarget(stickX: number, stickY: number, forward: WalkVelocity): WalkVelocity {
+  const magnitude = Math.hypot(stickX, stickY);
+  const facing = Math.hypot(forward.x, forward.z);
+  if (!Number.isFinite(magnitude) || magnitude <= 0.15 || facing < 0.001) return { x: 0, z: 0 };
+  const speed = WALK_SPEED * Math.min(1, (magnitude - 0.15) / 0.85);
+  const x = stickX / magnitude * speed;
+  const y = stickY / magnitude * speed;
+  return { x: (-forward.z * x - forward.x * y) / facing, z: (forward.x * x - forward.z * y) / facing };
+}
+
+export function walkingVelocity(current: WalkVelocity, target: WalkVelocity, delta: number): WalkVelocity {
+  const dt = Math.max(0, Math.min(Number.isFinite(delta) ? delta : 0, WALK_MAX_DELTA));
+  const blend = 1 - Math.exp(-WALK_RESPONSE * dt);
+  return { x: current.x + (target.x - current.x) * blend, z: current.z + (target.z - current.z) * blend };
+}
+
+export function walkOnGround(position: GroundPosition, velocity: WalkVelocity, delta: number): GroundPosition {
+  const dt = Math.max(0, Math.min(Number.isFinite(delta) ? delta : 0, WALK_MAX_DELTA));
+  let [x, , z] = position;
+  const nextX = x + velocity.x * dt;
+  if (safeLanding(nextX, z)) x = nextX;
+  const nextZ = z + velocity.z * dt;
+  if (safeLanding(x, nextZ)) z = nextZ;
+  return [x, 0, z];
+}
 
 export function viewpoint(place: Place): GroundPosition {
   const [x, , z] = place.pos;

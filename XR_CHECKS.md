@@ -18,6 +18,16 @@ Open the published HTTPS app directly in a WebXR-compatible headset browser. Cre
 4. Turn your head: the world must stay stable and the controls remain in front of you.
 5. Select **Quitter la VR** and confirm the desktop village returns.
 
+### Ground walking in VR
+The village uses one world unit per metre; the floor-relative headset pose supplies the visitor's real eye height, without a forced camera offset or head bob.
+
+1. Stand and calibrate the floor in the headset, then select **Entrer en VR**. Windows and snowmen should appear at human scale; crouching should lower your view naturally.
+2. Push the left thumbstick forward/backward or sideways. Walking eases toward a maximum of 1.2 metres per second, following your horizontal gaze even when looking up or down.
+3. Release the stick: motion should ease to a stop. Try approaching the central tree, house walls, snowmen and forest edge; joystick motion must stop at the safe boundary.
+4. Turn using the right thumbstick while walking. Rotation should pivot around your head without lifting you above the snow; teleportation and tour viewpoints should still work.
+
+Walking direction, easing, speed limits and blocked destinations are unit-tested. Actual headset height calibration, stick input, comfort and frame rate remain unverified without XR hardware. Software collision cannot prevent physically walking into a virtual object: respect the headset's real-room boundary.
+
 ### AR
 Open the published HTTPS app directly in a browser with immersive WebXR AR and hit-test support (not all mobile browsers support it), then select **Entrer en AR**.
 

@@ -35,3 +35,4 @@ use the editor.
 - Development probes: window.__sleigh.snapshot()/sim(seconds) inspect and advance live motion, and window.__christmasAudio() measures playback time, RMS and peak; these hooks do not ship in production.
 - ImmersiveVillage owns session-specific origins, locomotion, headset controls and AR hit-test placement; desktop camera controls must never run inside XR sessions to avoid overriding tracked head poses.
 - Ground destinations and AR scale constraints live in pure xr-navigation helpers with tests so teleport safety and catalog viewpoints stay synchronized.
+- VR walking uses headset-relative, eased left-stick input and safe ground movement in xr-navigation; keep the origin at metre scale and floor height so local-floor preserves the visitor's tracked eye height.

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { XROrigin, XRDomOverlay, useXR, useXRHitTest, useXRControllerLocomotion } from "@react-three/xr";
+import { XROrigin, XRDomOverlay, useXR, useXRStore, useXRHitTest, useXRControllerLocomotion } from "@react-three/xr";
 import * as THREE from "three";
 import { PLACES, type Place } from "@/lib/village-places";
-import { SNAP_DEGREES, safeLanding, viewpoint, type GroundPosition } from "@/lib/xr-navigation";
+import { SNAP_DEGREES, VR_WORLD_SCALE, WALK_MAX_DELTA, walkingTarget, walkingVelocity, walkOnGround, safeLanding, viewpoint, type GroundPosition, type WalkVelocity } from "@/lib/xr-navigation";
 import { Button } from "@/components/ui/button";
 
 export type ImmersiveProps = {
@@ -54,10 +54,30 @@ function VRNavigation({ focus, note, step, count, onStep, children }: ImmersiveP
   const [smooth, setSmooth] = useState(false);
   const [spot, setSpot] = useState(0);
   const heading = useRef<THREE.Group>(null);
-  useXRControllerLocomotion(origin, false, smooth ? { type: "smooth", speed: 1 } : { type: "snap", degrees: SNAP_DEGREES });
+  const xrStore = useXRStore();
+  const velocity = useRef<WalkVelocity>({ x: 0, z: 0 });
+  const lastFacing = useRef<WalkVelocity>({ x: 0, z: -1 });
+  const headPosition = useMemo(() => new THREE.Vector3(), []);
+  const headDirection = useMemo(() => new THREE.Vector3(), []);
+  function turn(angle: number) {
+    const group = origin.current;
+    if (!group) return;
+    camera.getWorldPosition(headPosition);
+    const x = headPosition.x, z = headPosition.z;
+    group.rotation.y += angle;
+    group.updateMatrixWorld(true);
+    camera.getWorldPosition(headPosition);
+    group.position.x += x - headPosition.x;
+    group.position.z += z - headPosition.z;
+  }
+  useXRControllerLocomotion((_, angle, delta) => {
+    // The library reports a per-frame angle; cap smooth turning after a stalled frame.
+    turn(smooth ? -angle * Math.min(delta, WALK_MAX_DELTA) / Math.max(delta, 0.001) : angle);
+  }, false, smooth ? { type: "smooth", speed: 1 } : { type: "snap", degrees: SNAP_DEGREES });
 
   function land(point: GroundPosition) {
     if (!origin.current || !safeLanding(point[0], point[2])) return;
+    velocity.current = { x: 0, z: 0 };
     const head = camera.getWorldPosition(new THREE.Vector3());
     const feet = origin.current.getWorldPosition(new THREE.Vector3());
     origin.current.position.x += point[0] - head.x;
@@ -81,8 +101,20 @@ function VRNavigation({ focus, note, step, count, onStep, children }: ImmersiveP
     group.position.z += before.z - after.z;
   }
   useEffect(() => { if (focus) visit(focus); }, [focus?.id]);
-  useFrame(() => {
+  useFrame((_, delta) => {
     if (!heading.current || !origin.current) return;
+    const controller = xrStore.getState().inputSourceStates.find(input => input.type === "controller" && input.inputSource.handedness === "left");
+    const stick = controller?.type === "controller" ? controller.gamepad["xr-standard-thumbstick"] : undefined;
+    camera.getWorldDirection(headDirection);
+    if (Math.hypot(headDirection.x, headDirection.z) > 0.001) lastFacing.current = { x: headDirection.x, z: headDirection.z };
+    velocity.current = walkingVelocity(velocity.current, walkingTarget(stick?.xAxis ?? 0, stick?.yAxis ?? 0, lastFacing.current), delta);
+    camera.getWorldPosition(headPosition);
+    const [x, , z] = walkOnGround([headPosition.x, 0, headPosition.z], velocity.current, delta);
+    origin.current.position.x += x - headPosition.x;
+    origin.current.position.z += z - headPosition.z;
+    // local-floor supplies the real eye height, including crouching; never overwrite the headset pose.
+    origin.current.position.y = 0;
+    origin.current.updateMatrixWorld(true);
     const head = camera.getWorldPosition(new THREE.Vector3());
     origin.current.worldToLocal(head);
     const direction = camera.getWorldDirection(new THREE.Vector3());
@@ -92,7 +124,7 @@ function VRNavigation({ focus, note, step, count, onStep, children }: ImmersiveP
     heading.current.rotation.y = Math.atan2(-direction.x, -direction.z);
   });
   return <>
-    <XROrigin ref={origin} position={[0, 0, 6]}>
+    <XROrigin ref={origin} position={[0, 0, 6]} scale={VR_WORLD_SCALE}>
       <group ref={heading}>
         <WorldButton label={focus ? `${step + 1}/${count} · ${focus.name}\n${note ?? ""}` : "Village de Noël\nPromenade libre"} position={[0, 0.28, 0]} onClick={() => { if (focus) visit(focus); }} />
         <WorldButton label="Précédent" position={[-0.35, 0, 0]} disabled={!count || step === 0} onClick={() => onStep(-1)} />
