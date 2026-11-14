@@ -6,15 +6,18 @@ import * as THREE from "three";
 import { useServerFn } from "@tanstack/react-start";
 import { PLACES, type Place } from "@/lib/village-places";
 import { planTour, type TourStop } from "@/lib/tour.functions";
-import ChristmasMusic from "./ChristmasMusic";
+import { MusicAudio, MusicControls, useChristmasMusic } from "./ChristmasMusic";
 import SantaSleigh from "./SantaSleigh";
 import ImmersiveVillage from "./ImmersiveVillage";
-import { Button } from "@/components/ui/button";
 import { AR_DEFAULT_SCALE, scaleForAR, safeLanding, type GroundPosition } from "@/lib/xr-navigation";
 import { ChimneySmoke, WeatherLighting } from "./VillageWeather";
 import WeatherControls from "./WeatherControls";
 import { snowfall, type Ambience } from "@/lib/village-weather";
 import ActivityControls, { type Activity, type ActivityProps } from "./ActivityControls";
+import WelcomeScreen from "./shell/WelcomeScreen";
+import ActionBar, { type PanelId } from "./shell/ActionBar";
+import TourChip from "./shell/TourChip";
+import { ImmersionPanel, TourPanel } from "./shell/panels";
 import VillageActivities, { TreeDecorations } from "./VillageActivities";
 import { addGarland, addOrnament, collectGift, GIFTS, INITIAL_DECORATION, type Decoration } from "@/lib/village-activities";
 
@@ -227,7 +230,19 @@ function Snowman({ position }: { position: [number, number, number] }) {
   );
 }
 
-function Scene({ focus, mode, teleport, ambience, snow, activities, onCollect }: { focus: Place | null; mode: "desktop" | "vr" | "ar"; teleport?: ((point: GroundPosition) => void) | undefined; ambience: Ambience; snow: number; activities: ActivityProps; onCollect: (id: string) => void }) {
+function useReducedMotion() {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setReduced(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  return reduced;
+}
+
+function Scene({ focus, mode, teleport, ambience, snow, activities, onCollect, idle }: { focus: Place | null; mode: "desktop" | "vr" | "ar"; teleport?: ((point: GroundPosition) => void) | undefined; ambience: Ambience; snow: number; activities: ActivityProps; onCollect: (id: string) => void; idle: boolean }) {
   const houses = useMemo(() => {
     const colors = ["#b23a3a", "#2f6b4f", "#c98b3a", "#3b5a8a", "#8a4a6b", "#a85a32"];
     return Array.from({ length: 8 }, (_, i) => {
@@ -271,7 +286,7 @@ function Scene({ focus, mode, teleport, ambience, snow, activities, onCollect }:
       <Suspense fallback={null}><SantaSleigh stopId={focus?.id} /></Suspense>
       {focus && <Marker place={focus} />}
       {mode === "desktop" && <><CameraRig focus={focus} />
-      <OrbitControls makeDefault target={[0, 2, 0]} maxPolarAngle={Math.PI / 2.1} minDistance={4} maxDistance={30} /></>}
+      <OrbitControls makeDefault target={[0, 2, 0]} maxPolarAngle={Math.PI / 2.1} minDistance={4} maxDistance={30} autoRotate={idle} autoRotateSpeed={0.4} /></>}
       <ActivityProbe mode={mode} />
     </>
   );
@@ -279,10 +294,13 @@ function Scene({ focus, mode, teleport, ambience, snow, activities, onCollect }:
 
 export default function Village() {
   const [ready, setReady] = useState(false);
-  const [ambience, setAmbience] = useState<Ambience>("dusk");
+  const [ambience, setAmbience] = useState<Ambience>("night");
   const [snow, setSnow] = useState(30);
   const plan = useServerFn(planTour);
-  const [open, setOpen] = useState(false);
+  const [welcome, setWelcome] = useState(true);
+  const [panel, setPanel] = useState<PanelId | null>(null);
+  const music = useChristmasMusic();
+  const reducedMotion = useReducedMotion();
   const [wish, setWish] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -325,68 +343,44 @@ export default function Village() {
   }
   const stop = tour?.stops[step];
   const focus = activityFocus ?? (stop ? PLACES.find((p) => p.id === stop.id) ?? null : null);
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  async function planWish() {
     if (!wish.trim() || loading) return;
     setLoading(true); setError(null);
     try {
       const r = await plan({ data: { wish } });
       if ("error" in r) setError(r.error);
-      else { setTour(r); setStep(0); setActivityFocus(null); setActivity(null); }
+      else { setTour(r); setStep(0); setActivityFocus(null); setActivity(null); setWelcome(false); }
     } catch { setError("Le guide n'a pas pu préparer votre parcours."); }
     finally { setLoading(false); }
   }
+  function moveStep(direction: number) { setActivityFocus(null); setStep(current => Math.max(0, Math.min((tour?.stops.length ?? 1) - 1, current + direction))); }
+  const xr = { vrSupported, arSupported, entering, onXR: enter, xrError };
+  const wishForm = { wish, onWish: setWish, loading, error, onPlan: planWish };
   return (
     <div className="relative h-dvh w-full bg-background" data-scene-ready={ready || undefined}>
       <Canvas shadows camera={{ position: [0, 2.5, 7.5], fov: 60, near: 0.01 }} onCreated={() => setTimeout(() => setReady(true), 300)}>
         <XR store={store}>
           <ImmersiveVillage focus={focus} note={activityFocus ? undefined : stop?.note} step={step} count={tour?.stops.length ?? 0} activities={activities}
-            onStep={direction => { setActivityFocus(null); setStep(current => Math.max(0, Math.min((tour?.stops.length ?? 1) - 1, current + direction))); }}
+            onStep={moveStep}
             scale={arScale} onScale={value => setArScale(scaleForAR(value))}
             ambience={ambience} onAmbience={setAmbience} snow={snow} onSnow={setSnow}
-            renderScene={(mode, teleport) => <Scene focus={focus} mode={mode} teleport={teleport} ambience={ambience} snow={snow} activities={activities} onCollect={collect} />} />
+            renderScene={(mode, teleport) => <Scene focus={focus} mode={mode} teleport={teleport} ambience={ambience} snow={snow} activities={activities} onCollect={collect} idle={welcome && !reducedMotion && !immersed} />} />
         </XR>
       </Canvas>
-      <div className={immersed ? "hidden" : "contents"}><ChristmasMusic /></div>
-      {!immersed && <>
-      <div className="pointer-events-none absolute inset-x-0 top-6 text-center">
-        <h1 className="text-4xl font-bold tracking-wide text-primary-foreground drop-shadow-lg">Village de Noël</h1>
-      </div>
-      <div className="absolute right-4 top-24 max-h-[calc(100dvh-14rem)] w-80 max-w-[calc(100%-2rem)] overflow-y-auto rounded-lg bg-card/90 p-4 text-card-foreground shadow-xl backdrop-blur">
-        <div className="mb-3 border-b border-border pb-3"><WeatherControls ambience={ambience} onAmbience={setAmbience} snow={snow} onSnow={setSnow} /></div>
-        <div className="mb-3 border-b border-border pb-3"><ActivityControls {...activities} /></div>
-        {hunting && activity !== "hunt" && <p role="status" className="mb-3 text-sm font-semibold">🎁 {found.length} / 5 cadeaux retrouvés</p>}
-        {!open && !tour ? (
-          <Button onClick={() => setOpen(true)} className="w-full">✨ Mon parcours personnalisé</Button>
-        ) : !tour ? (
-          <form onSubmit={submit} className="space-y-3">
-            <p className="font-semibold">Que souhaitez-vous découvrir ?</p>
-            <textarea value={wish} onChange={(e) => setWish(e.target.value)} maxLength={500} rows={3} placeholder="Ex. : des douceurs sucrées et des activités pour les enfants" className="w-full rounded-lg border border-input bg-background p-2 text-sm text-foreground" />
-            {error && <p className="text-sm text-destructive">{error}</p>}
-            <Button type="submit" disabled={loading || !wish.trim()} className="h-auto min-h-9 w-full whitespace-normal">{loading ? "Le guide prépare votre parcours…" : "Créer mon parcours"}</Button>
-          </form>
-        ) : (
-          <div className="space-y-3">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">{tour.title}</p>
-            <p className="text-lg font-bold">{step + 1}. {focus?.name}</p>
-            <p className="text-sm">{stop?.note}</p>
-            <div className="flex gap-2">
-              <Button variant="secondary" disabled={step === 0} onClick={() => { setActivityFocus(null); setStep(step - 1); }} className="flex-1">Précédent</Button>
-              <Button disabled={step >= tour.stops.length - 1} onClick={() => { setActivityFocus(null); setStep(step + 1); }} className="flex-1">Suivant</Button>
-            </div>
-            <p className="text-xs text-muted-foreground">Étape {step + 1} / {tour.stops.length}</p>
-            <Button variant="link" onClick={() => { setTour(null); setOpen(true); }}>Nouveau parcours</Button>
-          </div>
-        )}
-      </div>
-      <div className="absolute inset-x-0 bottom-6 flex flex-col items-center gap-2 px-4">
-        {xrError && <p role="alert" className="max-w-md rounded-md bg-card p-2 text-center text-sm text-destructive">{xrError}</p>}
-        <div className="flex gap-3">
-          <Button disabled={entering || !vrSupported} onClick={() => enter("VR")} size="lg">{vrSupported === undefined ? "Vérification VR…" : vrSupported ? "Entrer en VR" : "VR indisponible"}</Button>
-          <Button disabled={entering || !arSupported} onClick={() => enter("AR")} variant="secondary" size="lg">{arSupported === undefined ? "Vérification AR…" : arSupported ? "Entrer en AR" : "AR indisponible"}</Button>
-        </div>
-      </div>
-      </>}
+      {/* The audio element lives here so panels can open and close without stopping playback. */}
+      <MusicAudio audioRef={music.audioRef} />
+      {!immersed && (welcome
+        ? <WelcomeScreen {...wishForm} {...xr} onEnter={() => setWelcome(false)} />
+        : <>
+          <ActionBar open={panel} onOpen={setPanel} hunting={hunting} found={found.length} panels={{
+            tour: <TourPanel {...wishForm} tour={tour} step={step} focusName={focus?.name} note={stop?.note} onStep={moveStep} onReset={() => { setTour(null); setActivityFocus(null); }} />,
+            activities: <ActivityControls {...activities} />,
+            ambience: <WeatherControls ambience={ambience} onAmbience={setAmbience} snow={snow} onSnow={setSnow} />,
+            music: <MusicControls {...music} />,
+            immersion: <ImmersionPanel {...xr} />,
+          }} />
+          {tour && stop && focus && !activityFocus && <TourChip step={step} count={tour.stops.length} name={focus.name} onStep={moveStep} onOpen={() => setPanel("tour")} />}
+        </>)}
     </div>
   );
 }

@@ -1,13 +1,14 @@
 import { Sun, Sunset, Moon, Snowflake } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { AMBIENCES, AMBIENCE_LABELS, type Ambience } from "@/lib/village-weather";
 export type WeatherProps = { ambience: Ambience; onAmbience: (value: Ambience) => void; snow: number; onSnow: (value: number) => void };
 export default function WeatherControls({ ambience, onAmbience, snow, onSnow }: WeatherProps) {
   const icons = { day: Sun, dusk: Sunset, night: Moon };
-  return <div className="space-y-2">
-    <div role="group" aria-label="Ambiance du village" className="flex gap-1">
-      {AMBIENCES.map(value => { const Icon = icons[value]; return <Button key={value} variant={ambience === value ? "secondary" : "ghost"} size="sm" aria-pressed={ambience === value} onClick={() => onAmbience(value)} className="flex-1 gap-1 px-2"><Icon className="size-4" />{AMBIENCE_LABELS[value]}</Button>; })}
-    </div>
-    <label className="flex items-center gap-2 text-xs"><Snowflake className="size-4 shrink-0" /><span>Neige</span><input aria-label="Intensité de la neige" type="range" min="0" max="100" value={snow} onChange={event => onSnow(Number(event.target.value))} className="min-w-0 flex-1 accent-primary" /><span className="w-9 text-right tabular-nums">{snow}%</span></label>
+  return <div className="space-y-3">
+    <ToggleGroup type="single" variant="outline" value={ambience} onValueChange={value => { if (value) onAmbience(value as Ambience); }} aria-label="Ambiance du village" className="grid grid-cols-3 gap-2">
+      {AMBIENCES.map(value => { const Icon = icons[value]; return <ToggleGroupItem key={value} value={value} className="h-auto min-h-11 gap-1 px-2 text-sm leading-tight data-[state=on]:bg-accent data-[state=on]:text-accent-foreground"><Icon aria-hidden className="size-4" />{AMBIENCE_LABELS[value]}</ToggleGroupItem>; })}
+    </ToggleGroup>
+    <div className="flex items-center gap-3 text-sm"><Snowflake aria-hidden className="size-4 shrink-0" /><span>Neige</span><Slider aria-label="Intensité de la neige" min={0} max={100} step={1} value={[snow]} onValueChange={([value]) => onSnow(value ?? snow)} className="min-w-0 flex-1" /><span className="w-10 text-right tabular-nums">{snow}%</span></div>
   </div>;
 }

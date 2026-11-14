@@ -1,5 +1,10 @@
 # WebXR device checks
 
+## Desktop and mobile interface
+The welcome screen (wish, "Visiter librement", VR/AR buttons) and the bottom action bar (Parcours, Activités, Ambiance, Musique, Immersion) were captured with Playwright at 1440, 768 and 390 px: no console error, no horizontal overflow, panels open one at a time, Escape closes and returns focus, the music element stays mounted while panels close. Text contrast on the day ambience is computed at ≥ 4.5:1 for every token pair.
+
+Requires a real session: entering VR or AR must hide the welcome screen, the bar and the tour chip (they render only while no XR session is active) and bring them back on exit. The AR overlay and VR world panels keep their previous layout until the immersive-interface PR.
+
 ## Christmas activities
 Santa letters were tested with a real AI response; gift progression and decoration rules have automated tests.
 In VR, select **Poste du Père Noël**, then **Écrire / modifier** to open the world-space alphabet keyboard; send the letter and turn its pages. On AR devices with overlays, use the normal letter form. Without overlays, the world keyboard is available.

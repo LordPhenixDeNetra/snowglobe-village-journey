@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Mail, Gift, Paintbrush, Plus, RotateCcw, Send } from "lucide-react";
+import { Mail, Gift, Paintbrush, Plus, RotateCcw, Send, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { writeSantaLetter } from "@/lib/santa-letter.functions";
 import { GIFTS, ORNAMENT_COLORS, type Decoration, type OrnamentColor, type StarEffect } from "@/lib/village-activities";
 
@@ -45,14 +46,24 @@ export default function ActivityControls(props: ActivityProps) {
   const { activity, onActivity, hunting, found, decoration } = props;
   const [hint, setHint] = useState(false);
   const remaining = GIFTS.find(gift => !found.includes(gift.id));
-  return <section className="space-y-3">
-    <nav className="grid grid-cols-3 gap-1" aria-label="Activités de Noël">
-      <Button variant={activity === "letter" ? "default" : "outline"} size="sm" onClick={() => onActivity(activity === "letter" ? null : "letter")}><Mail />Poste</Button>
-      <Button variant={activity === "hunt" ? "default" : "outline"} size="sm" onClick={() => onActivity(activity === "hunt" ? null : "hunt")}><Gift />Cadeaux</Button>
-      <Button variant={activity === "tree" ? "default" : "outline"} size="sm" onClick={() => onActivity(activity === "tree" ? null : "tree")}><Paintbrush />Sapin</Button>
-    </nav>
-    {activity === "letter" && <><h2 className="font-semibold">La Poste du Père Noël</h2><SantaLetter /></>}
-    {activity === "hunt" && <div className="space-y-3"><h2 className="font-semibold">Chasse aux cadeaux</h2><p className="font-semibold" role="status">{found.length} / 5 cadeaux retrouvés</p>{found.length === 5 && <p className="text-secondary">Tous les cadeaux sont retrouvés ! ✨</p>}<Button onClick={() => { props.onHunt(); setHint(false); }}><Gift />{hunting ? "Recommencer la chasse" : "Commencer la chasse"}</Button>{hunting && remaining && <><Button variant="link" onClick={() => setHint(!hint)}>{hint ? "Masquer l’indice" : "Un indice"}</Button>{hint && <p className="text-sm text-muted-foreground">{remaining.hint}</p>}</>}</div>}
-    {activity === "tree" && <div className="space-y-3"><h2 className="font-semibold">Mon Grand Sapin</h2><p className="text-sm text-muted-foreground">Boules · {decoration.ornaments.length} / 60</p><div className="flex gap-2">{ORNAMENT_COLORS.map(color => <Button key={color} size="icon" variant="outline" title={`Ajouter une boule ${colorNames[color].toLowerCase()}`} aria-label={`Ajouter une boule ${colorNames[color].toLowerCase()}`} disabled={decoration.ornaments.length >= 60} onClick={() => props.onOrnament(color)}><span className={`ornament-swatch ornament-${color}`} /><Plus className="size-3" /></Button>)}</div><Button variant="outline" disabled={decoration.garlands >= 3} onClick={props.onGarland}><Plus />Guirlande · {decoration.garlands} / 3</Button><fieldset><legend className="mb-2 text-sm">Étoile</legend><div className="flex flex-wrap gap-1">{(["steady", "pulse", "twinkle"] as const).map(effect => <Button key={effect} size="sm" variant={decoration.star === effect ? "secondary" : "outline"} aria-pressed={decoration.star === effect} onClick={() => props.onStar(effect)}>{starNames[effect]}</Button>)}</div></fieldset><Button variant="ghost" onClick={props.onResetTree}><RotateCcw />Réinitialiser le sapin</Button></div>}
-  </section>;
+  // Radix Tabs never emits an empty value: activating the current tab again deselects it here,
+  // before Radix's own mousedown/keydown handlers run (they skip default-prevented events).
+  const toggle = (value: Activity) => (event: React.SyntheticEvent) => {
+    if (activity !== value) return;
+    if ("key" in event && (event as React.KeyboardEvent).key !== "Enter" && (event as React.KeyboardEvent).key !== " ") return;
+    event.preventDefault();
+    onActivity(null);
+  };
+  const tab = (value: Activity, Icon: typeof Mail, label: string) =>
+    <TabsTrigger value={value as string} className="min-h-11 gap-1" onMouseDown={toggle(value)} onKeyDown={toggle(value)}><Icon aria-hidden className="size-4" />{label}</TabsTrigger>;
+  return <Tabs value={activity ?? ""} onValueChange={value => onActivity(value ? value as Activity : null)} className="space-y-3">
+    <TabsList aria-label="Activités de Noël" className="grid h-auto w-full grid-cols-3 gap-1 bg-muted/60 p-1">
+      {tab("letter", Mail, "Poste")}
+      {tab("hunt", Gift, "Cadeaux")}
+      {tab("tree", Paintbrush, "Sapin")}
+    </TabsList>
+    <TabsContent value="letter" className="space-y-3"><h2 className="text-lg font-semibold">La Poste du Père Noël</h2><SantaLetter /></TabsContent>
+    <TabsContent value="hunt" className="space-y-3"><h2 className="text-lg font-semibold">Chasse aux cadeaux</h2><p className="font-semibold" role="status">{found.length} / 5 cadeaux retrouvés</p>{found.length === 5 && <p className="flex items-center gap-2 text-secondary"><Sparkles aria-hidden className="size-4" />Tous les cadeaux sont retrouvés !</p>}<Button className="min-h-11 w-full" onClick={() => { props.onHunt(); setHint(false); }}><Gift aria-hidden />{hunting ? "Recommencer la chasse" : "Commencer la chasse"}</Button>{hunting && remaining && <><Button variant="link" className="px-0" onClick={() => setHint(!hint)}>{hint ? "Masquer l’indice" : "Un indice"}</Button>{hint && <p className="text-sm text-muted-foreground">{remaining.hint}</p>}</>}</TabsContent>
+    <TabsContent value="tree" className="space-y-3"><h2 className="text-lg font-semibold">Mon Grand Sapin</h2><p className="text-sm text-muted-foreground">Boules · {decoration.ornaments.length} / 60</p><div className="flex gap-2">{ORNAMENT_COLORS.map(color => <Button key={color} size="icon" variant="outline" className="min-h-11 min-w-11" title={`Ajouter une boule ${colorNames[color].toLowerCase()}`} aria-label={`Ajouter une boule ${colorNames[color].toLowerCase()}`} disabled={decoration.ornaments.length >= 60} onClick={() => props.onOrnament(color)}><span className={`ornament-swatch ornament-${color}`} /><Plus aria-hidden className="size-3" /></Button>)}</div><Button variant="outline" className="min-h-11" disabled={decoration.garlands >= 3} onClick={props.onGarland}><Plus aria-hidden />Guirlande · {decoration.garlands} / 3</Button><fieldset><legend className="mb-2 text-sm">Étoile</legend><div className="flex flex-wrap gap-2">{(["steady", "pulse", "twinkle"] as const).map(effect => <Button key={effect} size="sm" className="min-h-11" variant={decoration.star === effect ? "secondary" : "outline"} aria-pressed={decoration.star === effect} onClick={() => props.onStar(effect)}>{starNames[effect]}</Button>)}</div></fieldset><Button variant="ghost" className="min-h-11" onClick={props.onResetTree}><RotateCcw aria-hidden />Réinitialiser le sapin</Button></TabsContent>
+  </Tabs>;
 }
