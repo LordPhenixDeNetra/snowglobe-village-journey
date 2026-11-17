@@ -77,8 +77,14 @@ export function seeded(seed: number): () => number {
 export type ForestPlacement = { x: number; z: number; scale: number; rotation: number };
 export function forestPlacements(seed = 11): ForestPlacement[] {
   const random = seeded(seed);
-  // The two small trees that hide gifts keep their catalogued positions.
-  const trees: ForestPlacement[] = [{ x: -11.3, z: -3, scale: 1.4, rotation: 0 }, { x: 2.5, z: -11.3, scale: 1.4, rotation: 0 }];
+  // The two small trees that hide gifts stand 0.65 m outward of them: the trunk (0.24 m) clears the gift lid (0.35 m)
+  // while the lowest skirt (1.33 m) still covers it.
+  const giftTree = (id: string): ForestPlacement => {
+    const [x, , z] = GIFTS.find(gift => gift.id === id)?.pos ?? [0, 0, 0];
+    const k = 1 + 0.65 / Math.hypot(x, z);
+    return { x: x * k, z: z * k, scale: 1.4, rotation: 0 };
+  };
+  const trees: ForestPlacement[] = [giftTree("foret"), giftTree("clairiere")];
   while (trees.length < 82) {
     const a = random() * Math.PI * 2, d = 13 + random() * 8;
     const x = Math.cos(a) * d, z = Math.sin(a) * d;
@@ -104,6 +110,11 @@ export function forestMatrices(trees = forestPlacements()): { trunks: Matrix4[];
   };
 }
 const UP = new Vector3(0, 1, 0);
+
+/** Catenary-like garland: 3.0 m at the anchors, 0.35 m lower mid-span, so the lowest point (2.65 m) clears a VR visitor. */
+export function garlandPoint(from: XZ, to: XZ, t: number): [number, number, number] {
+  return [from[0] + (to[0] - from[0]) * t, 3.0 - 0.35 * 4 * t * (1 - t), from[1] + (to[1] - from[1]) * t];
+}
 
 /** One cable between each pair of neighbouring chalets, anchored just inside the ring. */
 export function garlandSpans(): { from: XZ; to: XZ }[] {
@@ -174,9 +185,9 @@ export const SANTA: { at: XZ; yaw: number } = { at: santa, yaw: facingOrigin(san
 
 // A figure eight (lemniscate of Gerono) in the lake frame, same rotation convention as insideLake.
 const eight: XZ[] = Array.from({ length: 16 }, (_, i) => {
-  const t = (i / 16) * Math.PI * 2, lx = 1.6 * Math.sin(t), lz = 0.9 * Math.sin(2 * t);
+  const t = (i / 16) * Math.PI * 2, lx = 1.7 * Math.sin(t), lz = 0.9 * Math.sin(2 * t);
   const c = Math.cos(LAKE.rotation), s = Math.sin(LAKE.rotation);
   return [LAKE.center[0] + lx * c - lz * s, LAKE.center[1] + lx * s + lz * c];
 });
 // A quarter loop apart: half a loop would bring both skaters to the crossing at the same instant.
-export const SKATERS: { route: Route; phase: number }[] = [{ route: { points: eight, loop: true }, phase: 0 }, { route: { points: eight, loop: true }, phase: 0.25 }];
+export const SKATERS: { route: Route; phase: number }[] = [{ route: { points: eight, loop: true }, phase: 0 }, { route: { points: eight, loop: true }, phase: 0.27 }];

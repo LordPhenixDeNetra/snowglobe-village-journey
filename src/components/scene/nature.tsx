@@ -6,7 +6,7 @@ import { forestMatrices, LAKE, pathLayout, seeded, treeRadiusAt, TREE_TIERS } fr
 import { TreeDecorations } from "../VillageActivities";
 import { useWeatherColors } from "../VillageWeather";
 import type { ActivityProps } from "../ActivityControls";
-import { box, useMerged, type Part } from "./geometry";
+import { box, TWINKLE_STEP, useMerged, type Part } from "./geometry";
 
 const black = () => new THREE.Color();
 
@@ -28,13 +28,16 @@ export function BigTree({ activities, shadows }: { activities: ActivityProps; sh
     const mesh = lights.current; if (!mesh) return;
     bulbs.forEach((bulb, i) => { object.position.set(...bulb.position); object.updateMatrix(); mesh.setMatrixAt(i, object.matrix); mesh.setColorAt(i, colors[bulb.color] ?? black()); });
     mesh.instanceMatrix.needsUpdate = true; if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    mesh.computeBoundingSphere();
     const base = gifts.current; if (!base) return;
     (["red", "blue", "gold"] as const).forEach((name, i) => { const a = (i / 3) * Math.PI * 2 + 0.4; object.position.set(Math.cos(a) * 1.3, 0.26, Math.sin(a) * 1.3); object.rotation.set(0, a, 0); object.updateMatrix(); base.setMatrixAt(i, object.matrix); base.setColorAt(i, colors[name] ?? black()); });
     base.instanceMatrix.needsUpdate = true; if (base.instanceColor) base.instanceColor.needsUpdate = true;
+    base.computeBoundingSphere();
   }, [bulbs, colors, object]);
-  const frame = useRef(0);
-  useFrame(({ clock }) => {
-    const mesh = lights.current; if (!mesh || (frame.current++ & 1)) return;
+  const since = useRef(0);
+  useFrame(({ clock }, dt) => {
+    const mesh = lights.current; since.current += dt; if (!mesh || since.current < TWINKLE_STEP) return;
+    since.current = 0;
     const t = clock.elapsedTime;
     bulbs.forEach((bulb, i) => { tint.copy(colors[bulb.color] ?? black()).multiplyScalar(0.55 + 0.45 * Math.sin(t * 3 + i * 1.7)); mesh.setColorAt(i, tint); });
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;

@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import { bipedStep, followRoute, quadrupedLegs, skateLean, startWalker, stridePhase, type Walker } from "@/lib/gait";
+import { bipedStep, followRoute, quadrupedKnees, quadrupedLegs, skateLean, startWalker, stridePhase, type BipedStep, type Legs4, type Walker } from "@/lib/gait";
 import { ELVES, PADDOCK, PADDOCK_FENCE, REINDEER, routeLength, SANTA, SKATERS, type XZ } from "@/lib/village-props";
 import type { Activity } from "../ActivityControls";
 import { useWeatherColors } from "../VillageWeather";
-import { useMerged, type Part } from "./geometry";
+import { useMerged, useRadialTexture, type Part } from "./geometry";
 
 /* Characters are rigid parts hung on hidden Object3D skeletons. Each frame the skeletons are posed, then every
  * part's world matrix is copied into one InstancedMesh per part shape, shared by the whole cast: a handful of
@@ -53,6 +53,35 @@ function useKindGeometries(rings: number) {
   return geometries;
 }
 
+/** Roots of every mounted character, each with `userData.footprint = [rx, rz]` (metres): CharacterShadows paints
+ *  a soft disc under each of them, all characters in one draw call. */
+const footprints: THREE.Object3D[] = [];
+const MAX_FOOTPRINTS = 16;
+const footprint = (root: THREE.Object3D, rx: number, rz = rx) => { root.userData["footprint"] = [rx, rz]; return root; };
+
+/** Painted contact shadows: characters cast no real shadow (budget), these discs keep them on the snow. */
+export function CharacterShadows() {
+  const colors = useWeatherColors();
+  const mesh = useRef<THREE.InstancedMesh>(null);
+  const texture = useRadialTexture();
+  const disc = useMemo(() => new THREE.CircleGeometry(1, 20).rotateX(-Math.PI / 2), []);
+  useEffect(() => () => disc.dispose(), [disc]);
+  const object = useMemo(() => new THREE.Object3D(), []);
+  useFrame(() => {
+    const m = mesh.current; if (!m) return;
+    const count = Math.min(footprints.length, MAX_FOOTPRINTS);
+    for (let i = 0; i < count; i++) {
+      const root = footprints[i]!, size = root.userData["footprint"] as [number, number];
+      object.position.set(root.position.x, 0.02, root.position.z); object.rotation.set(0, root.rotation.y, 0); object.scale.set(size[0], 1, size[1]);
+      object.updateMatrix(); m.setMatrixAt(i, object.matrix);
+    }
+    m.count = count; m.instanceMatrix.needsUpdate = true;
+  });
+  return <instancedMesh ref={mesh} args={[disc, undefined, MAX_FOOTPRINTS]} frustumCulled={false} raycast={noRaycast} renderOrder={1}>
+    <meshBasicMaterial map={texture} color={colors["night-sky"] ?? black()} transparent opacity={0.45} depthWrite={false} />
+  </instancedMesh>;
+}
+
 /** Renders the leaves of posed skeletons; `animate` poses them (dt already clamped to 0.05 s).
  *  Characters never cast shadows: the shadow pass would double their draw calls past the Quest budget. */
 function Puppets({ leaves, roots, animate, shadows, rings = 6 }: { leaves: Leaf[]; roots: THREE.Object3D[]; animate: (dt: number, time: number) => void; shadows: boolean; rings?: number }) {
@@ -68,12 +97,16 @@ function Puppets({ leaves, roots, animate, shadows, rings = 6 }: { leaves: Leaf[
     for (const kind of KINDS) { const color = meshes.current[kind]?.instanceColor; if (color) color.needsUpdate = true; }
   }, [colors, leaves, slots]);
   const time = useRef(0);
+  useEffect(() => {
+    footprints.push(...roots);
+    return () => { for (const root of roots) footprints.splice(footprints.indexOf(root), 1); };
+  }, [roots]);
   useFrame((_, delta) => {
     const dt = Math.min(delta, 0.05); time.current += dt;
     animate(dt, time.current);
-    for (const root of roots) root.updateMatrixWorld(true);
-    leaves.forEach((leaf, i) => meshes.current[leaf.kind]?.setMatrixAt(slots[i] ?? 0, leaf.node.matrixWorld));
-    for (const kind of KINDS) { const mesh = meshes.current[kind]; if (mesh) mesh.instanceMatrix.needsUpdate = true; }
+    for (let i = 0; i < roots.length; i++) roots[i]?.updateMatrixWorld(true);
+    for (let i = 0; i < leaves.length; i++) { const leaf = leaves[i]!; meshes.current[leaf.kind]?.setMatrixAt(slots[i] ?? 0, leaf.node.matrixWorld); }
+    for (let k = 0; k < KINDS.length; k++) { const mesh = meshes.current[KINDS[k]!]; if (mesh) mesh.instanceMatrix.needsUpdate = true; }
   });
   // Not frustum-culled: instances walk away from any sphere computed once (the single red-nose instance vanished
   // as its trotting reindeer moved), and a few hundred instances cost nothing to submit.
@@ -102,7 +135,7 @@ function reindeer(b: Builder, redNose: boolean) {
     return { hip, knee };
   });
   const neck = b.joint(body, [0, 0.05, 0.48]);
-  b.seg(neck, "fur", [0, 0, 0], [0, NECK, 0], 0.15);
+  const neckPart = b.seg(neck, "fur", [0, 0, 0], [0, NECK, 0], 0.15);
   const head = b.joint(neck, [0, NECK, 0]);
   b.ball(head, "fur", [0, 0, 0.06], [0.17, 0.17, 0.22]);
   b.ball(head, "fur-light", [0, -0.05, 0.27], [0.11, 0.1, 0.14]);
@@ -115,7 +148,7 @@ function reindeer(b: Builder, redNose: boolean) {
     b.seg(head, "antler", [s * 0.14, 0.26, -0.1], [s * 0.16, 0.36, 0.1], 0.02);
     b.seg(head, "antler", [s * 0.22, 0.5, -0.14], [s * 0.36, 0.62, -0.22], 0.02);
   }
-  return { root, body, legs, neck, head, tail };
+  return { root: footprint(root, 0.45, 0.85), body, legs, neck, neckPart, head, tail };
 }
 
 /** Height lost by a leg whose thigh swings by `a` (the canon follows at −0.6 a): the body drops so hooves stay on the snow. */
@@ -131,24 +164,30 @@ export function Herd({ shadows }: { shadows: boolean }) {
     });
     return { rigs, leaves: b.leaves, roots: rigs.map(r => r.root) };
   }, []);
+  const swing = useMemo<Legs4>(() => [0, 0, 0, 0], []), knees = useMemo<Legs4>(() => [0, 0, 0, 0], []);
   const animate = (dt: number, time: number) => {
-    for (const rig of cast.rigs) {
-      let swing = [0, 0, 0, 0], bounce = 0, neck = 0.55, nose = 0;
+    for (let r = 0; r < cast.rigs.length; r++) {
+      const rig = cast.rigs[r]!;
+      let bounce = 0, neck = 0.55, nose = 0, stretch = 0;
+      swing.fill(0); knees.fill(0);
       if (rig.walker && rig.route) {
         followRoute(rig.walker, rig.route, 1.1, dt, 3);
         rig.root.position.set(rig.walker.position[0], 0, rig.walker.position[1]); rig.root.rotation.y = rig.walker.yaw;
         const phase = stridePhase(rig.walker.distance, 1.1);
-        swing = quadrupedLegs(phase, 0.45); bounce = 0.03 * Math.abs(Math.sin(phase * Math.PI * 2));
+        // The diagonal pair swinging forward bends its knees so the hooves clear the snow.
+        quadrupedLegs(phase, 0.45, swing); quadrupedKnees(phase, 0.7, knees); bounce = 0.03 * Math.abs(Math.sin(phase * Math.PI * 2));
         neck += 0.05 * Math.sin(phase * Math.PI * 4);
       } else {
-        // Grazing: the neck lowers to the snow and comes back up every 6 s, the two herds out of step.
+        // Grazing: every 6 s (the two out of step) the neck swings down and stretches 0.22 m and the head tips
+        // forward, so the nose comes within 0.1 m of the snow; the short standing neck could not reach it.
         const g = 0.5 - 0.5 * Math.cos((time / 6) * Math.PI * 2 + rig.seed);
         const down = g * g * (3 - 2 * g);
-        neck += 2.35 * down; nose = 0.6 * down;
+        neck += 2.45 * down; nose = 0.85 * down; stretch = 0.22 * down;
       }
-      rig.legs.forEach((leg, i) => { const a = swing[i] ?? 0; leg.hip.rotation.x = a; leg.knee.rotation.x = -0.6 * a; });
-      rig.body.position.y = BODY_Y - legDrop(Math.abs(swing[0] ?? 0)) + bounce;
+      for (let i = 0; i < 4; i++) { const leg = rig.legs[i]!, a = swing[i]!; leg.hip.rotation.x = a; leg.knee.rotation.x = -0.6 * a + knees[i]!; }
+      rig.body.position.y = BODY_Y - legDrop(Math.abs(swing[0])) + bounce;
       rig.neck.rotation.x = neck; rig.head.rotation.x = -neck + 0.15 + nose;
+      rig.neckPart.scale.y = NECK + stretch; rig.head.position.y = NECK + stretch;
       rig.tail.rotation.x = 0.2 * Math.sin(time * 9 + rig.seed);
     }
   };
@@ -201,7 +240,8 @@ function biped(b: Builder, look: Look) {
   const g = look.girth;
   b.seg(chest, look.coat, [0, -0.06, 0], [0, 0.32, 0], g);
   b.seg(chest, look.kind === "skater" ? look.coat : "bark", [0, 0.06, 0], [0, 0.01, 0], g * 1.04);
-  if (look.kind === "santa") { b.seg(chest, look.trim, [0, -0.025, 0], [0, -0.075, 0], g * 1.08); b.block(chest, "gold", [0, 0.035, g * 1.04], [0.07, 0.05, 0.02]); }
+  // Santa: white coat hem; no belt buckle, which kept him 10 triangles over his 700 budget.
+  if (look.kind === "santa") b.seg(chest, look.trim, [0, -0.025, 0], [0, -0.075, 0], g * 1.08);
   if (look.kind === "skater") { b.seg(chest, look.trim, [0, 0.36, 0], [0, 0.3, 0], 0.085); b.block(chest, look.trim, [0.05, 0.22, g * 0.95], [0.05, 0.16, 0.02]); }
   const head = b.joint(chest, [0, 0.32, 0]);
   const r = look.head;
@@ -242,22 +282,33 @@ const LOOKS: Record<string, Look> = {
 /** Leg pose and the matching hip height so the lower sole stays on the ground. */
 function stride(rig: Biped, thighL: number, thighR: number) {
   let reach = 0;
-  rig.legs.forEach((leg, i) => {
-    const a = i === 0 ? thighL : thighR, bend = 0.8 * Math.max(0, -a);
+  for (let i = 0; i < rig.legs.length; i++) {
+    const leg = rig.legs[i]!, a = i === 0 ? thighL : thighR, bend = 0.8 * Math.max(0, -a);
     leg.hip.rotation.x = a; leg.knee.rotation.x = bend;
     reach = Math.max(reach, THIGH_B * Math.cos(a) + SHIN * Math.cos(a + bend));
-  });
+  }
   rig.hips.position.y = HIPS_Y - (THIGH_B + SHIN - reach);
 }
 
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+
+function wave(arm: Biped["arms"][number], time: number, period: number) {
+  const s = Math.sin((time / period) * Math.PI * 2);
+  arm.shoulder.rotation.set(0, 0, -2.5 + 0.15 * s); arm.elbow.rotation.set(0, 0, -0.35 + 0.35 * s);
+}
+function rest(rig: Biped) {
+  for (let i = 0; i < rig.arms.length; i++) { const arm = rig.arms[i]!; arm.shoulder.rotation.set(0, 0, (i ? -1 : 1) * 0.12); arm.elbow.rotation.set(-0.15, 0, 0); }
+}
+// Pose buffers shared by every frame: the animation loop allocates nothing.
+const step: BipedStep = { thighL: 0, kneeL: 0, thighR: 0, kneeR: 0, drop: 0 };
+const glide = { lean: 0, push: 0 };
 
 export function Villagers({ activity, onSanta, shadows }: { activity: Activity; onSanta: () => void; shadows: boolean }) {
   const letter = useRef(activity === "letter");
   letter.current = activity === "letter";
   const cast = useMemo(() => {
     const b = builder();
-    const place = (rig: Biped, at: XZ, yaw: number, height: number) => { rig.root.position.set(at[0], 0, at[1]); rig.root.rotation.y = yaw; rig.root.scale.setScalar(height); return rig; };
+    const place = (rig: Biped, at: XZ, yaw: number, height: number) => { rig.root.position.set(at[0], 0, at[1]); rig.root.rotation.y = yaw; rig.root.scale.setScalar(height); footprint(rig.root, 0.27 * height); return rig; };
     const elves = ELVES.map(elf => {
       const rig = place(biped(b, LOOKS[elf.task] ?? LOOKS["walk"]!), elf.at, elf.yaw, 1.1);
       if (elf.task === "walk") { b.block(rig.chest, "red", [0, 0.17, 0.27], [0.26, 0.16, 0.16]); b.block(rig.chest, "gold", [0, 0.17, 0.27], [0.04, 0.165, 0.165]); }
@@ -283,20 +334,18 @@ export function Villagers({ activity, onSanta, shadows }: { activity: Activity; 
     return { elves, santa, skaters, leaves: b.leaves, roots: [...elves.map(e => e.rig.root), santa.root, ...skaters.map(s => s.rig.root)] };
   }, []);
   const animate = (dt: number, time: number) => {
-    const wave = (arm: Biped["arms"][number], period: number) => { const s = Math.sin((time / period) * Math.PI * 2); arm.shoulder.rotation.set(0, 0, -2.5 + 0.15 * s); arm.elbow.rotation.set(0, 0, -0.35 + 0.35 * s); };
-    const rest = (rig: Biped) => rig.arms.forEach((arm, i) => { arm.shoulder.rotation.set(0, 0, (i ? -1 : 1) * 0.12); arm.elbow.rotation.set(-0.15, 0, 0); });
-    for (const elf of cast.elves) {
-      const { rig } = elf;
+    for (let e = 0; e < cast.elves.length; e++) {
+      const elf = cast.elves[e]!, rig = elf.rig;
       if (elf.walker && elf.route) {
         followRoute(elf.walker, elf.route, 0.8, dt, 4);
         rig.root.position.set(elf.walker.position[0], 0, elf.walker.position[1]); rig.root.rotation.y = elf.walker.yaw;
         // Planted foot stays put on the snow: stride 0.55 m in the world is 0.5 in the ×1.1 rig.
-        const step = bipedStep(stridePhase(elf.walker.distance, 0.55), 0.55 / 1.1, THIGH_B, SHIN);
-        const [left, right] = rig.legs;
-        if (left && right) { left.hip.rotation.x = step.thighL; left.knee.rotation.x = step.kneeL; right.hip.rotation.x = step.thighR; right.knee.rotation.x = step.kneeR; }
+        bipedStep(stridePhase(elf.walker.distance, 0.55), 0.55 / 1.1, THIGH_B, SHIN, step);
+        const left = rig.legs[0]!, right = rig.legs[1]!;
+        left.hip.rotation.x = step.thighL; left.knee.rotation.x = step.kneeL; right.hip.rotation.x = step.thighR; right.knee.rotation.x = step.kneeR;
         rig.hips.position.y = HIPS_Y - step.drop;
         // Both hands hold the gift against the chest.
-        rig.arms.forEach(arm => { arm.shoulder.rotation.set(-0.9, 0, 0); arm.elbow.rotation.set(-0.6, 0, 0); });
+        for (let i = 0; i < rig.arms.length; i++) { const arm = rig.arms[i]!; arm.shoulder.rotation.set(-0.9, 0, 0); arm.elbow.rotation.set(-0.6, 0, 0); }
         continue;
       }
       stride(rig, 0, 0); rest(rig);
@@ -304,26 +353,27 @@ export function Villagers({ activity, onSanta, shadows }: { activity: Activity; 
         const hit = Math.pow(0.5 + 0.5 * Math.sin((time / 0.8) * Math.PI * 2), 2);
         const right = rig.arms[1]!; right.shoulder.rotation.set(-0.7 - 0.9 * hit, 0, -0.1); right.elbow.rotation.set(-0.5 - 0.3 * hit, 0, 0);
         rig.chest.rotation.x = 0.12;
-      } else wave(rig.arms[1]!, 1.4);
+      } else wave(rig.arms[1]!, time, 1.4);
     }
     const santa = cast.santa;
     stride(santa, 0, 0); rest(santa);
     const breath = Math.sin((time / 4) * Math.PI * 2);
     santa.chest.scale.set(1 + 0.015 * breath, 1, 1 + 0.02 * breath);
-    if (letter.current) wave(santa.arms[1]!, 1.2);
-    for (const skater of cast.skaters) {
-      const { rig, walker } = skater;
+    if (letter.current) wave(santa.arms[1]!, time, 1.2);
+    for (let k = 0; k < cast.skaters.length; k++) {
+      const skater = cast.skaters[k]!, rig = skater.rig, walker = skater.walker;
       const before = walker.yaw;
       followRoute(walker, skater.route, 1.4, dt, 3);
       // Bank into the turn, smoothed so the polyline corners do not jerk the body.
       const rate = dt > 0 ? wrap(walker.yaw - before) / dt : 0;
       skater.bank += (Math.max(-0.3, Math.min(0.3, -0.25 * rate)) - skater.bank) * Math.min(1, dt * 4);
       rig.root.position.set(walker.position[0], 0, walker.position[1]); rig.root.rotation.set(0, walker.yaw, skater.bank);
-      const { lean, push } = skateLean(stridePhase(walker.distance, 2.6));
-      rig.legs.forEach((leg, i) => { const out = i === 0 ? Math.max(0, push) : Math.max(0, -push); leg.hip.rotation.set(0.25 * out, 0, (i ? -1 : 1) * 0.35 * out); leg.knee.rotation.set(0.15, 0, 0); });
+      const { lean, push } = skateLean(stridePhase(walker.distance, 2.6), glide);
+      for (let i = 0; i < rig.legs.length; i++) { const leg = rig.legs[i]!, out = i === 0 ? Math.max(0, push) : Math.max(0, -push); leg.hip.rotation.set(0.25 * out, 0, (i ? -1 : 1) * 0.35 * out); leg.knee.rotation.set(0.15, 0, 0); }
       rig.hips.position.y = HIPS_Y - 0.01;
       rig.chest.rotation.set(0.3, 0, lean);
-      rig.arms.forEach((arm, i) => { arm.shoulder.rotation.set(0.2 * (i ? push : -push), 0, (i ? -1 : 1) * (0.75 + 0.1 * push)); arm.elbow.rotation.set(0, 0, 0); });
+      // Arms out ≤ 0.4 rad: hands stay within 0.5 m of the body axis, so the two skaters keep their hands 0.5 m apart.
+      for (let i = 0; i < rig.arms.length; i++) { const arm = rig.arms[i]!; arm.shoulder.rotation.set(0.2 * (i ? push : -push), 0, (i ? -1 : 1) * (0.35 + 0.05 * push)); arm.elbow.rotation.set(0, 0, 0); }
     }
   };
   return <>

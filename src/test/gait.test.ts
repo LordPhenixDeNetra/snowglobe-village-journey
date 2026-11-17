@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bipedLimbs, bipedStep, followRoute, quadrupedLegs, skateLean, startWalker, stridePhase } from "@/lib/gait";
+import { bipedLimbs, bipedStep, followRoute, quadrupedKnees, quadrupedLegs, skateLean, startWalker, stridePhase } from "@/lib/gait";
 import type { Route } from "@/lib/village-props";
 
 describe("pas du bipède", () => {
@@ -39,6 +39,26 @@ describe("gait", () => {
   it("les pattes vont par paires diagonales opposées", () => {
     const [fl, fr, hl, hr] = quadrupedLegs(0.25, 0.5);
     expect(fl).toBeCloseTo(hr); expect(fr).toBeCloseTo(hl); expect(fl).toBeCloseTo(-fr);
+  });
+  it("le genou d'une patte est fléchi quand sa cuisse avance, droit quand elle recule", () => {
+    // Positive thigh angles point the hoof backward, so a thigh moving forward has a decreasing angle.
+    for (let i = 0; i < 100; i++) {
+      const phase = i / 100, now = quadrupedLegs(phase, 0.45), next = quadrupedLegs(phase + 0.001, 0.45), knees = quadrupedKnees(phase + 0.0005, 0.9);
+      for (let leg = 0; leg < 4; leg++) {
+        const advancing = next[leg]! - now[leg]! < -1e-6, receding = next[leg]! - now[leg]! > 1e-6;
+        if (advancing) expect(knees[leg]).toBeGreaterThan(0);
+        if (receding) expect(knees[leg]).toBe(0);
+      }
+    }
+    expect(Math.max(...quadrupedKnees(0.5, 0.9))).toBeCloseTo(0.9);
+  });
+  it("les variantes à tampon réutilisent le tableau ou l'objet fourni", () => {
+    const legs: [number, number, number, number] = [0, 0, 0, 0], knees: [number, number, number, number] = [0, 0, 0, 0];
+    expect(quadrupedLegs(0.25, 0.5, legs)).toBe(legs); expect(legs).toEqual(quadrupedLegs(0.25, 0.5));
+    expect(quadrupedKnees(0.5, 0.9, knees)).toBe(knees); expect(knees).toEqual(quadrupedKnees(0.5, 0.9));
+    const step = bipedStep(0, 0.5, 0.21, 0.235); expect(bipedStep(0.3, 0.5, 0.21, 0.235, step)).toBe(step); expect(step).toEqual(bipedStep(0.3, 0.5, 0.21, 0.235));
+    const limbs = bipedLimbs(0, 0.6); expect(bipedLimbs(0.25, 0.6, limbs)).toBe(limbs); expect(limbs).toEqual(bipedLimbs(0.25, 0.6));
+    const glide = skateLean(0); expect(skateLean(0.25, glide)).toBe(glide); expect(glide).toEqual(skateLean(0.25));
   });
   it("chaque bras balance à l'opposé de la jambe du même côté", () => {
     const pose = bipedLimbs(0.25, 0.6);
