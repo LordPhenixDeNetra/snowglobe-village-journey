@@ -16,6 +16,7 @@ import Chalet from "./scene/Chalet";
 import { BigTree, Forest, Ground, Lake, Snowman } from "./scene/nature";
 import { Garlands, LampPosts } from "./scene/lights";
 import StatsProbe from "./scene/StatsProbe";
+import { Herd, Paddock, Villagers } from "./scene/characters";
 import WeatherControls from "./WeatherControls";
 import { snowfall, type Ambience } from "@/lib/village-weather";
 import ActivityControls, { type Activity, type ActivityProps } from "./ActivityControls";
@@ -179,6 +180,9 @@ function Scene({ focus, mode, teleport, ambience, snow, activities, onCollect, i
       {CHALETS.map(c => { const place = PLACES.find(p => p.id === c.id); return place && <Chalet key={c.id} place={place} variant={c.variant} facade={c.facade} seed={c.seed} rotation={-Math.atan2(place.pos[2], place.pos[0]) - Math.PI / 2} shadows={shadows} />; })}
       <Snowman position={[4, 0, 3]} seed={1} shadows={shadows} />
       <Snowman position={[-4.5, 0, -2.5]} seed={2} shadows={shadows} />
+      <Paddock shadows={shadows} />
+      <Herd shadows={shadows} />
+      <Villagers activity={activities.activity} onSanta={() => activities.onActivity("letter")} shadows={shadows} />
       <Snow intensity={snow} />
       <Suspense fallback={null}><SantaSleigh stopId={focus?.id} /></Suspense>
       {focus && <Marker place={focus} />}
