@@ -127,7 +127,7 @@ export default function Chalet({ place, variant, facade, seed, rotation, shadows
       position: [chimneyX, chimneyTop + 0.05, chimneyZ],
     });
     parts.push({
-      geometry: new THREE.SphereGeometry(1, 14, 8),
+      geometry: new THREE.SphereGeometry(1, 10, 6),
       position: [0, 0, 0],
       scale: [w / 2 + 0.4, 0.25, d / 2 + 0.45],
     });
@@ -173,7 +173,7 @@ export default function Chalet({ place, variant, facade, seed, rotation, shadows
   };
   const wreath = (): Part[] => [
     {
-      geometry: new THREE.TorusGeometry(0.2, 0.05, 6, 16),
+      geometry: new THREE.TorusGeometry(0.2, 0.05, 5, 12),
       position: [0, 2.08, front + 0.1],
       rotation: [Math.PI / 2, 0, 0],
     },

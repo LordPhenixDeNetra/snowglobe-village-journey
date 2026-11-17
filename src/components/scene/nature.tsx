@@ -208,9 +208,9 @@ export function Snowman({
   const side = useMemo(() => (random() < 0.5 ? -1 : 1), [random]);
   const white = useMerged(
     () => [
-      { geometry: new THREE.SphereGeometry(0.55, 18, 14), position: [0, 0.5, 0] },
-      { geometry: new THREE.SphereGeometry(0.4, 16, 12), position: [0, 1.2, 0] },
-      { geometry: new THREE.SphereGeometry(0.3, 16, 12), position: [0, 1.74, 0] },
+      { geometry: new THREE.SphereGeometry(0.55, 12, 8), position: [0, 0.5, 0] },
+      { geometry: new THREE.SphereGeometry(0.4, 10, 7), position: [0, 1.2, 0] },
+      { geometry: new THREE.SphereGeometry(0.3, 10, 7), position: [0, 1.74, 0] },
     ],
     [],
   );
@@ -245,13 +245,13 @@ export function Snowman({
       [0, 1.04, 0.37],
     ] as const)
       parts.push({
-        geometry: new THREE.SphereGeometry(y > 1.5 ? 0.04 : 0.05, 8, 6),
+        geometry: new THREE.SphereGeometry(y > 1.5 ? 0.04 : 0.05, 5, 3),
         position: [x, y, z],
       });
     for (let i = 0; i < 5; i++) {
       const a = -0.6 + i * 0.3;
       parts.push({
-        geometry: new THREE.SphereGeometry(0.025, 6, 5),
+        geometry: new THREE.SphereGeometry(0.025, 4, 2),
         position: [Math.sin(a) * 0.17, 1.6 + Math.cos(a) * 0.05 - 0.02, 0.27],
       });
     }
@@ -260,7 +260,7 @@ export function Snowman({
   const scarf = useMerged(
     () => [
       {
-        geometry: new THREE.TorusGeometry(0.3, 0.07, 8, 18),
+        geometry: new THREE.TorusGeometry(0.3, 0.07, 5, 12),
         position: [0, 1.47, 0],
         rotation: [Math.PI / 2, 0, 0],
       },

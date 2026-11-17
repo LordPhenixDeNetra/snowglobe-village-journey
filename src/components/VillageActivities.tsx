@@ -109,7 +109,9 @@ function GiftPackages({
     for (const mesh of [body.current, ribbon.current]) {
       if (!mesh) continue;
       gifts.forEach((gift, i) => {
-        mesh.setMatrixAt(i, matrix.makeTranslation(...gift.pos));
+        // The hovered gift grows a little: readable at night, unlike a colour change alone.
+        const grow = hover === i ? 1.15 : 1;
+        mesh.setMatrixAt(i, matrix.makeScale(grow, grow, grow).setPosition(...gift.pos));
         if (mesh === body.current)
           mesh.setColorAt(
             i,
