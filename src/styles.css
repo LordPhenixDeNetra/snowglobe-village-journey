@@ -92,6 +92,11 @@
   --scene-path: oklch(0.9 0.015 235);
   --scene-stone: oklch(0.7 0.02 250);
   --scene-scarf: oklch(0.62 0.2 25);
+  --scene-fur: oklch(0.5 0.07 55);
+  --scene-fur-light: oklch(0.82 0.04 80);
+  --scene-antler: oklch(0.7 0.05 75);
+  --scene-nose: oklch(0.6 0.22 25);
+  --scene-skin: oklch(0.8 0.06 55);
   /* Polar-night identity: one dark theme; `.dark` mirrors it so the class is a no-op. */
   --radius: 1rem;
   --background: oklch(0.17 0.04 265);

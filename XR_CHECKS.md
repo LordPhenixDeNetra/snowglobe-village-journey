@@ -12,6 +12,8 @@ Requires a headset: 72 fps on Quest 2 at the default and overview positions, sig
 
 Requires a real session: entering VR or AR must hide the welcome screen, the bar and the tour chip (they render only while no XR session is active) and bring them back on exit.
 
+**Characters.** Three reindeer in a fenced paddock (one trots a loop, two graze), three elves at the Atelier (one carries a gift between the workbench and the tree, one hammers, one waves), Santa at the Poste and two skaters on the lake. Locomotion is the pure, tested `gait.ts` (stride phase driven by distance, diagonal leg pairs, arm/leg opposition, `dt` clamped to 0.05 s, bounded yaw rate). Routes and spots are unit-tested against chalets, lamp posts, the tree, viewpoints, sleigh stops, the parked sleigh, snowmen, gifts and the lake. Every part type is one `InstancedMesh` shared by the whole cast, and characters cast no shadow, to stay in budget: default view 118 draw calls / 145 k triangles at night (115 / 144 k by day), overview 144 / 153 k (142 / 153 k by day), paddock close-up 59–61 / 84–91 k. Clicking Santa selects the Poste activity, and he waves while it is active; the five hunt gifts stay visible and the sleigh still parks in front of the Poste. Requires a headset: 72 fps on Quest 2 with the characters animating, and the controller ray passing through characters to the ground and gifts.
+
 ## Christmas activities
 Santa letters were tested with a real AI response; gift progression and decoration rules have automated tests.
 In VR, open **Plus…** and select **Poste**, then **Écrire / modifier** to open the world-space alphabet keyboard; send the letter and turn its pages. On AR devices with overlays, use the normal letter form. Without overlays, the world keyboard is available.

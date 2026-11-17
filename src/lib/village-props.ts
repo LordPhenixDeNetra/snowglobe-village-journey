@@ -114,3 +114,69 @@ export function garlandSpans(): { from: XZ; to: XZ }[] {
 export function lampPoolOpacity(ambience: Ambience): number {
   return ambience === "day" ? 0 : ambience === "dusk" ? 0.45 : 0.9;
 }
+
+export type Route = { points: XZ[]; loop: boolean };
+
+const segments = (route: Route) => route.points.slice(0, route.loop ? undefined : -1).map((a, i) => [a, route.points[(i + 1) % route.points.length] ?? a] as const);
+
+export function routeLength(route: Route): number {
+  return segments(route).reduce((sum, [a, b]) => sum + Math.hypot(b[0] - a[0], b[1] - a[1]), 0);
+}
+
+/** Points every `step` metres along the polyline (the end point is included for an open route). */
+export function sampleRoute(route: Route, step = 0.1): XZ[] {
+  const result: XZ[] = [];
+  let start = 0;
+  for (const [a, b] of segments(route)) {
+    const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    for (let s = Math.ceil(start / step - 1e-9) * step; s < start + length - 1e-9; s += step) {
+      const t = (s - start) / length;
+      result.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+    }
+    start += length;
+  }
+  const last = route.points[route.points.length - 1];
+  if (!route.loop && last) result.push([...last]);
+  return result;
+}
+
+/** A point given as (along, across) in the frame of a ring angle: along the spoke, across toward increasing angle. */
+const ringPoint = (angle: number, along: number, across: number): XZ =>
+  [along * Math.cos(angle) - across * Math.sin(angle), along * Math.sin(angle) + across * Math.cos(angle)];
+const facingOrigin = ([x, z]: XZ) => Math.atan2(-x, -z);
+const placeAngle = (id: string) => { const place = PLACES.find(p => p.id === id); return place ? Math.atan2(place.pos[2], place.pos[0]) : 0; };
+
+const toVillage = Math.atan2(-PADDOCK.center[1], -PADDOCK.center[0]);
+const paddockPoint = (angle: number, r: number): XZ => [PADDOCK.center[0] + Math.cos(angle) * r, PADDOCK.center[1] + Math.sin(angle) * r];
+// 14 slots around the paddock; the two facing the village hold a gate instead of posts.
+export const PADDOCK_FENCE: XZ[] = Array.from({ length: 12 }, (_, k) => paddockPoint(toVillage + ((k + 1.5) / 14) * Math.PI * 2, PADDOCK.r));
+// 0.7 m from the centre (not 0.9): heads and antlers then keep clear of the trotter on its 1.7 m circle.
+const grazing = (side: 1 | -1): XZ => paddockPoint(toVillage + (side > 0 ? 0 : Math.PI), 0.7);
+export const REINDEER: { route: Route | null; at: XZ; yaw: number; redNose: boolean }[] = [
+  { route: { points: Array.from({ length: 8 }, (_, i) => paddockPoint(toVillage + (i / 8) * Math.PI * 2, PADDOCK.r - 0.8)), loop: true }, at: paddockPoint(toVillage, PADDOCK.r - 0.8), yaw: 0, redNose: true },
+  { route: null, at: grazing(1), yaw: -toVillage, redNose: false },
+  { route: null, at: grazing(-1), yaw: Math.PI - toVillage, redNose: false },
+];
+
+// In front of the Atelier the spoke itself holds the visitor viewpoint (r 6) and the sleigh stop (r 6.5), and the
+// parked sleigh (SLEIGH_HOME) sits on its other side: the walking loop runs from the workbench toward the Grand Sapin
+// between the snowman and the lamp post, and the workers stand clear of all of them.
+const ATELIER = placeAngle("atelier-jouets");
+const elfLoop: XZ[] = ([[3.6, -2.15], [3.8, -1.9], [4.4, -1.8], [5.0, -1.9], [5.2, -2.15], [5.0, -2.4], [4.4, -2.5], [3.8, -2.4]] as XZ[]).map(([along, across]) => ringPoint(ATELIER, along, across));
+const hammer = ringPoint(ATELIER, 7.2, -1.6), wave = ringPoint(ATELIER, 7.5, 2.2);
+export const ELVES: { route: Route | null; at: XZ; yaw: number; task: "walk" | "hammer" | "wave"; seed: number }[] = [
+  { route: { points: elfLoop, loop: true }, at: elfLoop[0] ?? [0, 0], yaw: 0, task: "walk", seed: 1 },
+  { route: null, at: hammer, yaw: facingOrigin(hammer), task: "hammer", seed: 2 },
+  { route: null, at: wave, yaw: facingOrigin(wave), task: "wave", seed: 3 },
+];
+const santa = ringPoint(placeAngle("poste-pere-noel"), 7.0, 1.7);
+export const SANTA: { at: XZ; yaw: number } = { at: santa, yaw: facingOrigin(santa) };
+
+// A figure eight (lemniscate of Gerono) in the lake frame, same rotation convention as insideLake.
+const eight: XZ[] = Array.from({ length: 16 }, (_, i) => {
+  const t = (i / 16) * Math.PI * 2, lx = 1.6 * Math.sin(t), lz = 0.9 * Math.sin(2 * t);
+  const c = Math.cos(LAKE.rotation), s = Math.sin(LAKE.rotation);
+  return [LAKE.center[0] + lx * c - lz * s, LAKE.center[1] + lx * s + lz * c];
+});
+// A quarter loop apart: half a loop would bring both skaters to the crossing at the same instant.
+export const SKATERS: { route: Route; phase: number }[] = [{ route: { points: eight, loop: true }, phase: 0 }, { route: { points: eight, loop: true }, phase: 0.25 }];
