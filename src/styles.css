@@ -180,20 +180,68 @@
     line-height: 1.5;
   }
 
-  h1, h2, h3 {
+  h1,
+  h2,
+  h3 {
     font-family: var(--font-heading);
   }
 }
 
 /* Frosted panel shared by the welcome card, the action bar and the floating panels. */
-.glass { background: var(--card); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid var(--border); }
+.glass {
+  background: var(--card);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border);
+}
 
-.ornament-swatch { display: block; width: 1rem; height: 1rem; border-radius: 50%; }
-.ornament-red { background: var(--scene-red); }
-.ornament-gold { background: var(--scene-gold); }
-.ornament-blue { background: var(--scene-blue); }
-.ornament-green { background: var(--scene-green); }
-.santa-parchment { position: relative; background: var(--parchment); color: var(--parchment-ink); border-block: 5px solid var(--parchment-edge); padding: 1.5rem 1rem; animation: parchment-unroll 800ms ease-out both; transform-origin: top; }
-.parchment-seal { display: block; text-align: center; color: var(--primary); font-size: 2rem; }
-@keyframes parchment-unroll { from { opacity: 0; clip-path: inset(0 0 100% 0); transform: translateY(-12px); } to { opacity: 1; clip-path: inset(0); transform: translateY(0); } }
-@media (prefers-reduced-motion: reduce) { .santa-parchment { animation: none; } }
+.ornament-swatch {
+  display: block;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+}
+.ornament-red {
+  background: var(--scene-red);
+}
+.ornament-gold {
+  background: var(--scene-gold);
+}
+.ornament-blue {
+  background: var(--scene-blue);
+}
+.ornament-green {
+  background: var(--scene-green);
+}
+.santa-parchment {
+  position: relative;
+  background: var(--parchment);
+  color: var(--parchment-ink);
+  border-block: 5px solid var(--parchment-edge);
+  padding: 1.5rem 1rem;
+  animation: parchment-unroll 800ms ease-out both;
+  transform-origin: top;
+}
+.parchment-seal {
+  display: block;
+  text-align: center;
+  color: var(--primary);
+  font-size: 2rem;
+}
+@keyframes parchment-unroll {
+  from {
+    opacity: 0;
+    clip-path: inset(0 0 100% 0);
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    clip-path: inset(0);
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .santa-parchment {
+    animation: none;
+  }
+}

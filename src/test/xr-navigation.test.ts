@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { PLACES } from "@/lib/village-places";
-import { safeLanding, viewpoint, scaleForAR, walkingTarget, walkingVelocity, walkOnGround, WALK_SPEED, VR_WORLD_SCALE, controllerTurn, horizontalHit } from "@/lib/xr-navigation";
+import {
+  safeLanding,
+  viewpoint,
+  scaleForAR,
+  walkingTarget,
+  walkingVelocity,
+  walkOnGround,
+  WALK_SPEED,
+  VR_WORLD_SCALE,
+  controllerTurn,
+  horizontalHit,
+} from "@/lib/xr-navigation";
 import { LAMP_POSTS } from "@/lib/village-props";
 
 describe("immersive navigation", () => {
@@ -27,8 +38,8 @@ describe("immersive navigation", () => {
   it("places AR only on finite horizontal surface poses", () => {
     const pose = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0.4, 0.8, -1, 1];
     expect(horizontalHit(pose)).toBe(true);
-    expect(horizontalHit(pose.map((value, index) => index === 5 ? 0 : value))).toBe(false);
-    expect(horizontalHit(pose.map((value, index) => index === 12 ? NaN : value))).toBe(false);
+    expect(horizontalHit(pose.map((value, index) => (index === 5 ? 0 : value)))).toBe(false);
+    expect(horizontalHit(pose.map((value, index) => (index === 12 ? NaN : value)))).toBe(false);
     expect(horizontalHit([])).toBe(false);
   });
   it("walks forward and sideways relative to the headset at real-world scale", () => {

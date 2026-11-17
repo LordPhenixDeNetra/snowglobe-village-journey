@@ -7,7 +7,9 @@ describe("personalized tour sleigh", () => {
   });
   it("arrives exactly at the selected tour destination", () => {
     const [x, y, z] = sleighPosition([2.5, 0.2, 4], [6.5, 0.2, 0], 1);
-    expect(x).toBe(6.5); expect(y).toBeCloseTo(0.2, 10); expect(z).toBeCloseTo(0, 10);
+    expect(x).toBe(6.5);
+    expect(y).toBeCloseTo(0.2, 10);
+    expect(z).toBeCloseTo(0, 10);
   });
   it("travels between stops rather than teleporting", () => {
     const position = sleighPosition([0, 0.2, 0], [6, 0.2, 4], 0.5);

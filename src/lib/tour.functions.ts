@@ -6,7 +6,9 @@ export type TourResult = { title: string; stops: TourStop[] } | { error: string 
 
 export const planTour = createServerFn({ method: "POST" })
   .inputValidator((input: { wish: string }) => {
-    const wish = String(input?.wish ?? "").trim().slice(0, 500);
+    const wish = String(input?.wish ?? "")
+      .trim()
+      .slice(0, 500);
     if (!wish) throw new Error("Décrivez ce que vous souhaitez découvrir.");
     return { wish };
   })
@@ -53,13 +55,16 @@ export const planTour = createServerFn({ method: "POST" })
       }
       const parsed = JSON.parse(text) as { title: string; stops: TourStop[] };
       const stops = parsed.stops.filter((s) => ids.includes(s.id));
-      if (!stops.length) return { error: "Le guide n'a pas trouvé de parcours. Essayez une autre envie." };
+      if (!stops.length)
+        return { error: "Le guide n'a pas trouvé de parcours. Essayez une autre envie." };
       return { title: parsed.title, stops };
     } catch (e) {
       if (e instanceof GatewayError) {
         console.error("planTour gateway error", e.code, e.ids);
-        if (e.code === "rate_limited") return { error: "Trop de demandes, réessayez dans un instant." };
-        if (e.code === "payment_required") return { error: "Le guide est indisponible (crédits IA épuisés)." };
+        if (e.code === "rate_limited")
+          return { error: "Trop de demandes, réessayez dans un instant." };
+        if (e.code === "payment_required")
+          return { error: "Le guide est indisponible (crédits IA épuisés)." };
         return { error: "Le guide est momentanément indisponible." };
       }
       console.error("planTour error", e);

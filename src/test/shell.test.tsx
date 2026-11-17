@@ -10,12 +10,26 @@ import WeatherControls from "@/components/WeatherControls";
 import { MusicControls } from "@/components/ChristmasMusic";
 
 // Server functions are not called here; the mock only lets the modules load in jsdom.
-vi.mock("@tanstack/react-start", () => ({ useServerFn: () => vi.fn(), createServerFn: () => ({ inputValidator: () => ({ handler: () => vi.fn() }) }) }));
+vi.mock("@tanstack/react-start", () => ({
+  useServerFn: () => vi.fn(),
+  createServerFn: () => ({ inputValidator: () => ({ handler: () => vi.fn() }) }),
+}));
 
 describe("contenus de panneaux", () => {
   it("activités : onglets accessibles sans emoji, Cadeaux affiche le compteur", () => {
     const onActivity = vi.fn();
-    const props = { activity: "hunt" as const, onActivity, found: ["chocolat"], hunting: true, onHunt: vi.fn(), decoration: { ornaments: [], garlands: 0, star: "pulse" as const }, onOrnament: vi.fn(), onGarland: vi.fn(), onStar: vi.fn(), onResetTree: vi.fn() };
+    const props = {
+      activity: "hunt" as const,
+      onActivity,
+      found: ["chocolat"],
+      hunting: true,
+      onHunt: vi.fn(),
+      decoration: { ornaments: [], garlands: 0, star: "pulse" as const },
+      onOrnament: vi.fn(),
+      onGarland: vi.fn(),
+      onStar: vi.fn(),
+      onResetTree: vi.fn(),
+    };
     render(<ActivityControls {...props} />);
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Poste" }));
     expect(onActivity).toHaveBeenCalledWith("letter");
@@ -24,7 +38,18 @@ describe("contenus de panneaux", () => {
   });
   it("activités : recliquer l'onglet actif désélectionne l'activité", () => {
     const onActivity = vi.fn();
-    const props = { activity: "hunt" as const, onActivity, found: [], hunting: false, onHunt: vi.fn(), decoration: { ornaments: [], garlands: 0, star: "pulse" as const }, onOrnament: vi.fn(), onGarland: vi.fn(), onStar: vi.fn(), onResetTree: vi.fn() };
+    const props = {
+      activity: "hunt" as const,
+      onActivity,
+      found: [],
+      hunting: false,
+      onHunt: vi.fn(),
+      decoration: { ornaments: [], garlands: 0, star: "pulse" as const },
+      onOrnament: vi.fn(),
+      onGarland: vi.fn(),
+      onStar: vi.fn(),
+      onResetTree: vi.fn(),
+    };
     render(<ActivityControls {...props} />);
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Cadeaux" }));
     expect(onActivity).toHaveBeenCalledWith(null);
@@ -34,14 +59,29 @@ describe("contenus de panneaux", () => {
   it("ambiance : groupe à bascule et curseur étiquetés", () => {
     const onAmbience = vi.fn();
     render(<WeatherControls ambience="night" onAmbience={onAmbience} snow={30} onSnow={vi.fn()} />);
-    expect(screen.getByRole("radio", { name: "Nuit polaire" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("radio", { name: "Nuit polaire" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
     fireEvent.click(screen.getByRole("radio", { name: "Jour" }));
     expect(onAmbience).toHaveBeenCalledWith("day");
-    expect(screen.getByRole("slider", { name: "Intensité de la neige" })).toHaveAttribute("aria-valuenow", "30");
+    expect(screen.getByRole("slider", { name: "Intensité de la neige" })).toHaveAttribute(
+      "aria-valuenow",
+      "30",
+    );
   });
   it("musique : les contrôles ne possèdent pas l'élément audio", () => {
     const toggle = vi.fn(async () => {});
-    render(<MusicControls audioRef={{ current: null }} playing={false} volume={35} error={false} toggle={toggle} setVolume={vi.fn()} />);
+    render(
+      <MusicControls
+        audioRef={{ current: null }}
+        playing={false}
+        volume={35}
+        error={false}
+        toggle={toggle}
+        setVolume={vi.fn()}
+      />,
+    );
     expect(document.querySelector("audio")).toBeNull();
     const button = screen.getByRole("button", { name: "Activer la musique de Noël" });
     expect(button).toHaveTextContent("Activer la musique de Noël");
@@ -50,11 +90,20 @@ describe("contenus de panneaux", () => {
   });
 });
 
-const panels = { tour: <p>P</p>, activities: <p>A</p>, ambience: <p>M</p>, music: <p>Mu</p>, immersion: <p>I</p> };
+const panels = {
+  tour: <p>P</p>,
+  activities: <p>A</p>,
+  ambience: <p>M</p>,
+  music: <p>Mu</p>,
+  immersion: <p>I</p>,
+};
 
 describe("barre d'actions", () => {
   it("ouvre un seul panneau, marque l'entrée active, Escape referme et rend le focus", () => {
-    const Harness = () => { const [open, setOpen] = useState<PanelId | null>(null); return <ActionBar open={open} onOpen={setOpen} hunting={false} found={0} panels={panels} />; };
+    const Harness = () => {
+      const [open, setOpen] = useState<PanelId | null>(null);
+      return <ActionBar open={open} onOpen={setOpen} hunting={false} found={0} panels={panels} />;
+    };
     render(<Harness />);
     const tour = screen.getByRole("button", { name: "Parcours" });
     fireEvent.click(tour);
@@ -82,18 +131,51 @@ describe("barre d'actions", () => {
 describe("panneau parcours et puce", () => {
   it("affiche l'erreur, désactive sans souhait, puis montre l'étape et navigue", () => {
     const onStep = vi.fn();
-    const base = { step: 0, wish: "", onWish: vi.fn(), loading: false, onPlan: vi.fn(), onStep, onReset: vi.fn() };
-    const { rerender } = render(<TourPanel {...base} tour={null} focusName={undefined} note={undefined} error="Le guide n'a pas pu préparer votre parcours." />);
-    expect(screen.getByRole("alert")).toHaveTextContent("Le guide n'a pas pu préparer votre parcours.");
+    const base = {
+      step: 0,
+      wish: "",
+      onWish: vi.fn(),
+      loading: false,
+      onPlan: vi.fn(),
+      onStep,
+      onReset: vi.fn(),
+    };
+    const { rerender } = render(
+      <TourPanel
+        {...base}
+        tour={null}
+        focusName={undefined}
+        note={undefined}
+        error="Le guide n'a pas pu préparer votre parcours."
+      />,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Le guide n'a pas pu préparer votre parcours.",
+    );
     expect(screen.getByRole("button", { name: "Créer mon parcours" })).toBeDisabled();
-    rerender(<TourPanel {...base} tour={{ title: "Douceurs", stops: [{ id: "chocolaterie", note: "Miam." }, { id: "boulangerie", note: "Pain." }] }} focusName="La Chocolaterie" note="Miam." error={null} />);
+    rerender(
+      <TourPanel
+        {...base}
+        tour={{
+          title: "Douceurs",
+          stops: [
+            { id: "chocolaterie", note: "Miam." },
+            { id: "boulangerie", note: "Pain." },
+          ],
+        }}
+        focusName="La Chocolaterie"
+        note="Miam."
+        error={null}
+      />,
+    );
     expect(screen.getByText("1. La Chocolaterie")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Précédent" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Suivant" }));
     expect(onStep).toHaveBeenCalledWith(1);
   });
   it("la puce montre l'étape, navigue et ouvre le panneau", () => {
-    const onStep = vi.fn(), onOpen = vi.fn();
+    const onStep = vi.fn(),
+      onOpen = vi.fn();
     render(<TourChip step={1} count={4} name="La Chocolaterie" onStep={onStep} onOpen={onOpen} />);
     const stop = screen.getByRole("button", { name: "2/4 · La Chocolaterie" });
     expect(stop).toHaveAttribute("title", "2/4 · La Chocolaterie");
@@ -105,7 +187,19 @@ describe("panneau parcours et puce", () => {
   });
 });
 
-const welcome = { wish: "", onWish: vi.fn(), loading: false, error: null, onPlan: vi.fn(), onEnter: vi.fn(), vrSupported: true, arSupported: false, entering: false, onXR: vi.fn(), xrError: null };
+const welcome = {
+  wish: "",
+  onWish: vi.fn(),
+  loading: false,
+  error: null,
+  onPlan: vi.fn(),
+  onEnter: vi.fn(),
+  vrSupported: true,
+  arSupported: false,
+  entering: false,
+  onXR: vi.fn(),
+  xrError: null,
+};
 
 describe("écran d'accueil", () => {
   it("désactive le parcours sans souhait, propose la visite libre et signale l'AR indisponible", () => {
@@ -118,7 +212,9 @@ describe("écran d'accueil", () => {
     expect(screen.getByRole("button", { name: "Entrer en VR" })).toBeEnabled();
   });
   it("reste désactivé avec un souhait d'espaces et affiche l'erreur près du champ", () => {
-    render(<WelcomeScreen {...welcome} wish="   " error="Le guide est momentanément indisponible." />);
+    render(
+      <WelcomeScreen {...welcome} wish="   " error="Le guide est momentanément indisponible." />,
+    );
     expect(screen.getByRole("button", { name: "Créer mon parcours" })).toBeDisabled();
     expect(screen.getByRole("alert")).toHaveTextContent("Le guide est momentanément indisponible.");
   });

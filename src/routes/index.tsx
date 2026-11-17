@@ -6,9 +6,17 @@ export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "Village de Noël WebXR" },
-      { name: "description", content: "Explorez le village en VR ou AR : lettres au Père Noël, chasse aux cinq cadeaux et décoration du grand sapin." },
+      {
+        name: "description",
+        content:
+          "Explorez le village en VR ou AR : lettres au Père Noël, chasse aux cinq cadeaux et décoration du grand sapin.",
+      },
       { property: "og:title", content: "Village de Noël WebXR" },
-      { property: "og:description", content: "Lettres au Père Noël, cadeaux cachés et sapin interactif dans un village de Noël en 3D, VR et AR." },
+      {
+        property: "og:description",
+        content:
+          "Lettres au Père Noël, cadeaux cachés et sapin interactif dans un village de Noël en 3D, VR et AR.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
