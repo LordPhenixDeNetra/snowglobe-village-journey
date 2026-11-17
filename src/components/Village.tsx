@@ -3,9 +3,9 @@ import { OrbitControls, Environment, Lightformer } from "@react-three/drei";
 import { XR, TeleportTarget, createXRStore, useXRSessionModeSupported } from "@react-three/xr";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import { useServerFn } from "@tanstack/react-start";
 import { PLACES, type Place } from "@/lib/village-places";
-import { planTour, type TourStop } from "@/lib/tour.functions";
+import type { TourStop } from "@/lib/tour.functions";
+import { usePlanTour } from "@/hooks/use-village-services";
 import { MusicAudio, MusicControls, useChristmasMusic } from "./ChristmasMusic";
 import SantaSleigh, { forgetSleighModel } from "./SantaSleigh";
 import ImmersiveVillage from "./ImmersiveVillage";
@@ -314,7 +314,7 @@ export default function Village() {
   const [ready, setReady] = useState(false);
   const [ambience, setAmbience] = useState<Ambience>("night");
   const [snow, setSnow] = useState(30);
-  const plan = useServerFn(planTour);
+  const plan = usePlanTour();
   const [welcome, setWelcome] = useState(true);
   const [panel, setPanel] = useState<PanelId | null>(null);
   const music = useChristmasMusic();
@@ -404,7 +404,7 @@ export default function Village() {
     setLoading(true);
     setError(null);
     try {
-      const r = await plan({ data: { wish } });
+      const r = await plan(wish);
       if ("error" in r) setError(r.error);
       else {
         setTour(r);

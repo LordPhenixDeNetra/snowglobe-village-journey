@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { useServerFn } from "@tanstack/react-start";
 import { Mail, Gift, Paintbrush, Plus, RotateCcw, Send, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { writeSantaLetter } from "@/lib/santa-letter.functions";
+import { useSantaLetter } from "@/hooks/use-village-services";
+import { AI_NOTICE } from "@/lib/static-site";
 import {
   GIFTS,
   ORNAMENT_COLORS,
@@ -29,7 +29,7 @@ const colorNames = { red: "Rouge", gold: "Or", blue: "Bleu", green: "Vert" };
 export const starNames = { steady: "Fixe", pulse: "Respiration", twinkle: "Scintillante" };
 
 export function SantaLetter() {
-  const send = useServerFn(writeSantaLetter);
+  const send = useSantaLetter();
   const [name, setName] = useState("");
   const [letter, setLetter] = useState("");
   const [reply, setReply] = useState("");
@@ -41,7 +41,7 @@ export function SantaLetter() {
     setBusy(true);
     setError("");
     try {
-      const result = await send({ data: { name, letter } });
+      const result = await send({ name, letter });
       if ("error" in result) setError(result.error);
       else setReply(result.reply);
     } catch {
@@ -86,7 +86,7 @@ export function SantaLetter() {
             />
           </label>
           <p className="text-xs text-muted-foreground">
-            Réponse imaginaire générée par IA · Ne partagez pas d’adresse ni de coordonnées.
+            {AI_NOTICE} · Ne partagez pas d’adresse ni de coordonnées.
           </p>
           {error && (
             <p role="alert" className="text-sm text-destructive">

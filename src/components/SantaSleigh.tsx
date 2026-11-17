@@ -3,6 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import sleighAsset from "@/assets/models/santa-sleigh.glb.asset.json";
+import { assetUrl } from "@/lib/static-site";
 import {
   SLEIGH_HOME,
   SLEIGH_TRAVEL_SECONDS,
@@ -23,11 +24,11 @@ declare global {
 
 /** Forget a failed load so the next mount fetches the model again. */
 export function forgetSleighModel() {
-  useGLTF.clear(sleighAsset.url);
+  useGLTF.clear(assetUrl(sleighAsset));
 }
 
 export default function SantaSleigh({ stopId }: { stopId: string | undefined }) {
-  const { scene } = useGLTF(sleighAsset.url);
+  const { scene } = useGLTF(assetUrl(sleighAsset));
   const group = useRef<THREE.Group>(null);
   const motion = useRef({
     from: [...SLEIGH_HOME] as SleighPosition,

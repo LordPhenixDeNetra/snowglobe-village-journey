@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import musicAsset from "@/assets/audio/christmas-music.mp3.asset.json";
 import { getVillageMixer, setMusicVolume } from "@/lib/audio-mixer";
+import { assetUrl } from "@/lib/static-site";
 
 declare global {
   interface Window {
@@ -87,7 +88,9 @@ export function useChristmasMusic(): ChristmasMusic {
 }
 
 export function MusicAudio({ audioRef }: { audioRef: RefObject<HTMLAudioElement | null> }) {
-  return <audio ref={audioRef} src={musicAsset.url} loop preload="none" crossOrigin="anonymous" />;
+  return (
+    <audio ref={audioRef} src={assetUrl(musicAsset)} loop preload="none" crossOrigin="anonymous" />
+  );
 }
 
 export function MusicControls({ playing, volume, error, toggle, setVolume }: ChristmasMusic) {
