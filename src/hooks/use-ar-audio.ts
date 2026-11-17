@@ -6,6 +6,7 @@ import { AR_SOUND_POSITIONS, narrationForStop } from "@/lib/ar-audio";
 import type { Place } from "@/lib/village-places";
 import bells from "@/assets/audio/bells.mp3.asset.json";
 import fire from "@/assets/audio/fireplace.mp3.asset.json";
+import { assetUrl } from "@/lib/static-site";
 
 type Sound = { source: AudioBufferSourceNode; panner: PannerNode };
 export function useImmersiveAudio(
@@ -101,7 +102,7 @@ export function useImmersiveAudio(
       await mixer.context.resume();
       if (!buffers.current.length)
         buffers.current = await Promise.all(
-          [bells.url, fire.url].map(async (url) => {
+          [assetUrl(bells), assetUrl(fire)].map(async (url) => {
             const response = await fetch(url);
             if (!response.ok) throw new Error("Audio unavailable");
             return mixer.context.decodeAudioData(await response.arrayBuffer());

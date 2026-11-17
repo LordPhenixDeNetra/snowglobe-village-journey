@@ -29,8 +29,8 @@ import type { WeatherProps } from "./WeatherControls";
 import { AMBIENCE_LABELS } from "@/lib/village-weather";
 import { starNames, type ActivityProps } from "./ActivityControls";
 import { nextStar, ORNAMENT_COLORS } from "@/lib/village-activities";
-import { useServerFn } from "@tanstack/react-start";
-import { writeSantaLetter } from "@/lib/santa-letter.functions";
+import { useSantaLetter } from "@/hooks/use-village-services";
+import { AI_NOTICE } from "@/lib/static-site";
 import WorldPanel, { pulse } from "./xr/WorldPanel";
 import VRPanel, { pressShared } from "./xr/VRPanel";
 import AROverlay from "./xr/AROverlay";
@@ -582,7 +582,7 @@ function WorldActivities({
 }
 
 function WorldLetter() {
-  const send = useServerFn(writeSantaLetter);
+  const send = useSantaLetter();
   const [letter, setLetter] = useState("");
   const [reply, setReply] = useState("");
   const [busy, setBusy] = useState(false);
@@ -614,7 +614,7 @@ function WorldLetter() {
       .slice(page * 16, (page + 1) * 16)
       .forEach((text, i) => ctx.fillText(text, 60, 90 + i * 55));
     ctx.font = "28px sans-serif";
-    ctx.fillText("Réponse imaginaire générée par IA · Ne partagez pas d’adresse.", 60, 990, 900);
+    ctx.fillText(`${AI_NOTICE} · Ne partagez pas d’adresse.`, 60, 990, 900);
     const next = new THREE.CanvasTexture(canvas);
     next.colorSpace = THREE.SRGBColorSpace;
     setTexture(next);
@@ -625,7 +625,7 @@ function WorldLetter() {
     setBusy(true);
     setKeyboard(false);
     try {
-      const result = await send({ data: { name: "", letter } });
+      const result = await send({ name: "", letter });
       setReply("reply" in result ? result.reply : result.error);
       setPage(0);
     } catch {
