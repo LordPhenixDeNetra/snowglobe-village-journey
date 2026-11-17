@@ -4,6 +4,7 @@
 - [x] Animated characters: reindeer and paddock, elves, Santa, skaters, with a tested distance-driven gait.
 - [x] Glass VR panel with hierarchy and hover; AR overlay with the action bar and docked panels.
 - [x] Test placements, gait, panel rules and overlay; measure the draw-call and triangle budget.
+- [x] Cleanup pass: village survives a failed sleigh load, gift hunt within budget, decor, character and interface polish.
 - [ ] Verify the overhaul on a Quest 2 and an AR phone (frame rate, legibility, rays, overlay taps) — needs hardware; see XR_CHECKS.md.
 
 # Christmas village additions
