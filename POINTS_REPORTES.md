@@ -22,3 +22,17 @@ Points mineurs relevés en revue, sans effet bloquant pour le visiteur :
 - Commentaire d'emprise du chalet (2,9 × 2,2 m) faux pour la calotte de neige (3,0 m) et la congère (3,4 × 2,7 m).
 - Cadeau « foret » traversé par le tronc de son petit sapin ; décaler ce sapin d'environ 0,5 m.
 - Lampadaires sans calotte de neige (prévue par la spec §7.2).
+
+## 2026-11-17 — PR2b personnages
+
+- **Pas d'ombre portée des personnages** : la passe d'ombre doublait leurs draw calls (vue par défaut 127 > 120). Ils paraissent un peu posés sur la neige ; une ombre peinte au sol (un disque instancié, 1 draw call) les ancrerait.
+- **Chasse aux cadeaux lancée** : la vue d'ensemble de jour monte à 177 draw calls (vue par défaut 127), au-delà du budget mesuré hors chasse ; les cadeaux en comptent la plus grande part (≈ 168 sans les personnages). À mesurer et réduire dans la PR qui touchera les activités.
+- **Patineurs** : décalés d'un quart de boucle (un demi les ferait se croiser au centre en même temps), ils passent à ≈ 1,5 m l'un de l'autre, bras écartés presque bout à bout ; le lac de 4,4 × 3 m est petit pour deux silhouettes de 1,6 m.
+- **Clic sur le Père Noël** : il active l'activité « Poste » (onglet actif, caméra vers la Poste) comme le clic sur le sapin, mais n'ouvre pas le panneau Activités ; l'ouvrir demanderait de remonter `setPanel` jusqu'à `Scene`.
+- **Mouvement réduit** : les personnages s'animent même avec `prefers-reduced-motion`, comme la fumée et les guirlandes.
+- **Père Noël à 710 triangles** (cible 700) : la boucle de ceinture et l'ourlet blanc dépassent de 10 triangles.
+- **Contrôle `__sleigh.sim(4)` → `[6.5, 0.2, 0]`** : il demande un parcours (fonction serveur IA) ; vérifié à la place sur l'arrêt de la Poste (`[-4.6, 0.2, 4.6]`).
+- Revue PR2b : petites allocations par frame dans l'animation des personnages (tableaux renvoyés par `quadrupedLegs`/`bipedLimbs`/`skateLean`, fermetures recréées, `forEach`) ; à passer en tampons réutilisés.
+- Revue PR2b : les pattes en élan du renne raclent la neige (aucune levée du pied pour la paire diagonale qui avance) ; ajouter une flexion du genou proportionnelle à `max(0, cos(phase·2π))`.
+- Revue PR2b : les rennes qui broutent gardent le museau à ~0,4 m au-dessus de la neige ; baisser davantage le cou ou la tête.
+- Revue PR2b : les tests de placement vérifient le centre des personnages, pas leur emprise (tête du renne, cadeau du lutin) ; soustraire un rayon d'emprise.
