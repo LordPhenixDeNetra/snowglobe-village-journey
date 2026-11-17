@@ -18,3 +18,8 @@ La PR de nettoyage (#6) a traité la plupart des points relevés pendant la refo
 - **Chemin réel de `SceneErrorBoundary`** (promesse Suspense rejetée par `useGLTF`) : couvert seulement par une capture en 404, pas par le test unitaire.
 - **Contrôle `__sleigh.sim(4)` → `[6.5, 0.2, 0]`** : il demande un parcours (fonction serveur IA).
 - **Matériel** : tout ce qui est listé dans `XR_CHECKS.md` (Quest 2, téléphone AR).
+
+## GitHub Pages
+
+- **Erreur récupérable d'hydratation (#422) sur la copie statique** : React abandonne l'hydratation de la coquille prérendue et rend le bloc Suspense côté client. Aucun effet visible (vérifié : accueil, parcours, lettre, musique, traîneau), et l'app Lovable n'est pas concernée. Piste : la coquille SPA de TanStack Start avec une route `ssr: false`.
+- **Médias en double** : `public/media/` copie les 4 fichiers CC0 servis par Lovable ; si un média change dans Lovable, le recopier ici.
