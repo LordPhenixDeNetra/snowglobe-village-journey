@@ -82,7 +82,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "description", content: "Un village de Noël immersif à explorer en 3D, VR et AR." },
       { name: "author", content: "Lovable" },
       { property: "og:title", content: "Village de Noël WebXR" },
-      { property: "og:description", content: "Un village de Noël immersif à explorer en 3D, VR et AR." },
+      {
+        property: "og:description",
+        content: "Un village de Noël immersif à explorer en 3D, VR et AR.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:site", content: "@Lovable" },

@@ -8,7 +8,11 @@ Object.defineProperty(window, "scrollTo", {
 // Radix Slider observes its track size; jsdom has no ResizeObserver.
 Object.defineProperty(window, "ResizeObserver", {
   writable: true,
-  value: class { observe() {} unobserve() {} disconnect() {} },
+  value: class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  },
 });
 
 Object.defineProperty(window, "matchMedia", {

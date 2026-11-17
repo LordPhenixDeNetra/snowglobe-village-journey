@@ -11,7 +11,14 @@ declare global {
   }
 }
 
-export type ChristmasMusic = { audioRef: RefObject<HTMLAudioElement | null>; playing: boolean; volume: number; error: boolean; toggle: () => Promise<void>; setVolume: (value: number) => void };
+export type ChristmasMusic = {
+  audioRef: RefObject<HTMLAudioElement | null>;
+  playing: boolean;
+  volume: number;
+  error: boolean;
+  toggle: () => Promise<void>;
+  setVolume: (value: number) => void;
+};
 
 // The hook owns playback state; the <audio> element stays mounted by the page so closing a panel never cuts the music.
 export function useChristmasMusic(): ChristmasMusic {
@@ -24,19 +31,23 @@ export function useChristmasMusic(): ChristmasMusic {
   useEffect(() => {
     const element = audioRef.current;
     const pauseWhenHidden = () => {
-      if (document.hidden) { element?.pause(); setPlaying(false); }
+      if (document.hidden) {
+        element?.pause();
+        setPlaying(false);
+      }
     };
     document.addEventListener("visibilitychange", pauseWhenHidden);
-    if (import.meta.env.DEV) window.__christmasAudio = () => {
-      const samples = new Float32Array(1024);
-      mixer.current?.analyser.getFloatTimeDomainData(samples);
-      return {
-        playing: audioRef.current ? !audioRef.current.paused : false,
-        time: audioRef.current?.currentTime ?? 0,
-        rms: Math.sqrt(samples.reduce((sum, x) => sum + x * x, 0) / samples.length),
-        peak: samples.reduce((peak, x) => Math.max(peak, Math.abs(x)), 0),
+    if (import.meta.env.DEV)
+      window.__christmasAudio = () => {
+        const samples = new Float32Array(1024);
+        mixer.current?.analyser.getFloatTimeDomainData(samples);
+        return {
+          playing: audioRef.current ? !audioRef.current.paused : false,
+          time: audioRef.current?.currentTime ?? 0,
+          rms: Math.sqrt(samples.reduce((sum, x) => sum + x * x, 0) / samples.length),
+          peak: samples.reduce((peak, x) => Math.max(peak, Math.abs(x)), 0),
+        };
       };
-    };
     return () => {
       document.removeEventListener("visibilitychange", pauseWhenHidden);
       element?.pause();
@@ -47,7 +58,11 @@ export function useChristmasMusic(): ChristmasMusic {
   async function toggle() {
     const element = audioRef.current;
     if (!element) return;
-    if (playing) { element.pause(); setPlaying(false); return; }
+    if (playing) {
+      element.pause();
+      setPlaying(false);
+      return;
+    }
     setError(false);
     try {
       if (!mixer.current) {
@@ -59,9 +74,15 @@ export function useChristmasMusic(): ChristmasMusic {
       await mixer.current.context.resume();
       await element.play();
       setPlaying(true);
-    } catch { setError(true); setPlaying(false); }
+    } catch {
+      setError(true);
+      setPlaying(false);
+    }
   }
-  function setVolume(value: number) { setVolumeState(value); setMusicVolume(value / 100); }
+  function setVolume(value: number) {
+    setVolumeState(value);
+    setMusicVolume(value / 100);
+  }
   return { audioRef, playing, volume, error, toggle, setVolume };
 }
 
@@ -70,12 +91,40 @@ export function MusicAudio({ audioRef }: { audioRef: RefObject<HTMLAudioElement 
 }
 
 export function MusicControls({ playing, volume, error, toggle, setVolume }: ChristmasMusic) {
-  return <div className="space-y-3">
-    <Button variant={playing ? "default" : "secondary"} className="min-h-11 w-full text-base" onClick={() => { void toggle(); }} aria-pressed={playing}>
-      {playing ? <Music2 aria-hidden /> : <VolumeX aria-hidden />}{playing ? "Couper la musique de Noël" : "Activer la musique de Noël"}
-    </Button>
-    <div className="flex items-center gap-3 text-sm"><span>Volume</span><Slider aria-label="Volume de la musique" min={0} max={100} step={1} value={[volume]} onValueChange={([value]) => setVolume(value ?? volume)} className="min-w-0 flex-1" /><span className="w-10 text-right tabular-nums">{volume}%</span></div>
-    <p className="text-xs text-muted-foreground">Musique sous licence, lancée uniquement sur votre geste.</p>
-    {error && <p role="alert" className="text-sm text-destructive">Musique indisponible, réessayez.</p>}
-  </div>;
+  return (
+    <div className="space-y-3">
+      <Button
+        variant={playing ? "default" : "secondary"}
+        className="min-h-11 w-full text-base"
+        onClick={() => {
+          void toggle();
+        }}
+        aria-pressed={playing}
+      >
+        {playing ? <Music2 aria-hidden /> : <VolumeX aria-hidden />}
+        {playing ? "Couper la musique de Noël" : "Activer la musique de Noël"}
+      </Button>
+      <div className="flex items-center gap-3 text-sm">
+        <span>Volume</span>
+        <Slider
+          aria-label="Volume de la musique"
+          min={0}
+          max={100}
+          step={1}
+          value={[volume]}
+          onValueChange={([value]) => setVolume(value ?? volume)}
+          className="min-w-0 flex-1"
+        />
+        <span className="w-10 text-right tabular-nums">{volume}%</span>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Musique sous licence, lancée uniquement sur votre geste.
+      </p>
+      {error && (
+        <p role="alert" className="text-sm text-destructive">
+          Musique indisponible, réessayez.
+        </p>
+      )}
+    </div>
+  );
 }

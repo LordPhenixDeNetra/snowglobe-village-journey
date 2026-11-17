@@ -6,7 +6,6 @@ La PR de nettoyage (#6) a traité la plupart des points relevés pendant la refo
 
 ## Outillage
 
-- **`npm run lint` échoue sur `main`** : erreurs `prettier/prettier`, surtout des fins de ligne CRLF (`core.autocrlf=true` sur Windows) et des fichiers existants non formatés (`ImmersiveVillage.tsx`, `SantaSleigh.tsx`, `src/components/ui/*`). À traiter dans une PR dédiée (`prettier --write` + `.gitattributes` `* text=auto eol=lf`). En attendant, vérifier ESLint sans la règle Prettier sur les fichiers modifiés.
 - **`vite preview` ne sert pas la build** : le préréglage nitro/cloudflare écrit `.output/`, mais `@tanstack/start-plugin-core` attend `dist/server/server.js`. Les captures locales passent par `vite dev` avec `LOVABLE_PREVIEW_HOST=id-preview--d1897ca2-0b6e-4b73-94a1-162b7886c71f.lovable.app`.
 
 ## Scène
