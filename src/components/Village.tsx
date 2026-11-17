@@ -7,7 +7,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { PLACES, type Place } from "@/lib/village-places";
 import { planTour, type TourStop } from "@/lib/tour.functions";
 import { MusicAudio, MusicControls, useChristmasMusic } from "./ChristmasMusic";
-import SantaSleigh from "./SantaSleigh";
+import SantaSleigh, { forgetSleighModel } from "./SantaSleigh";
 import ImmersiveVillage from "./ImmersiveVillage";
 import {
   AR_DEFAULT_SCALE,
@@ -283,7 +283,8 @@ function Scene({
       />
       <CharacterShadows />
       <Snow intensity={snow} />
-      <SceneErrorBoundary>
+      {/* Three more tries (5 s, 10 s, 20 s) after a failed load, e.g. a brief network outage. */}
+      <SceneErrorBoundary retries={3} retryDelayMs={5000} onRetry={forgetSleighModel}>
         <Suspense fallback={null}>
           <SantaSleigh stopId={focus?.id} />
         </Suspense>
