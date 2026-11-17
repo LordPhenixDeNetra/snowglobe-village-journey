@@ -1,25 +1,38 @@
 import { useEffect, useRef, type ReactNode } from "react";
-import { Compass, Gift, Headset, Moon, Music2, X } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Compass, Gift, Headset, Moon, Music2, X, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 
 export type PanelId = "tour" | "activities" | "ambience" | "music" | "immersion";
-export type ActionBarProps = {
-  open: PanelId | null; onOpen: (id: PanelId | null) => void;
+export type ActionItem<T extends string = PanelId> = { id: T; title: string; icon: LucideIcon };
+export type ActionBarProps<T extends string = PanelId> = {
+  open: T | null; onOpen: (id: T | null) => void;
   hunting: boolean; found: number;
-  panels: Record<PanelId, ReactNode>;
-  titles?: Partial<Record<PanelId, string>>;
+  panels: Record<T, ReactNode>;
+  titles?: Partial<Record<T, string>>;
+  /** Entries of the bar; defaults to the desktop/mobile five. */
+  items?: ActionItem<T>[];
+  /** Mount point for the open panel (the AR DOM overlay only shows its own subtree); docks it above the bar. */
+  container?: HTMLElement | null;
+  brand?: boolean;
+  forceMobile?: boolean;
 };
 
-const IDS: PanelId[] = ["tour", "activities", "ambience", "music", "immersion"];
-const TITLES: Record<PanelId, string> = { tour: "Parcours", activities: "Activités", ambience: "Ambiance", music: "Musique", immersion: "Immersion" };
-const ICONS = { tour: Compass, activities: Gift, ambience: Moon, music: Music2, immersion: Headset };
+const ITEMS: ActionItem[] = [
+  { id: "tour", title: "Parcours", icon: Compass },
+  { id: "activities", title: "Activités", icon: Gift },
+  { id: "ambience", title: "Ambiance", icon: Moon },
+  { id: "music", title: "Musique", icon: Music2 },
+  { id: "immersion", title: "Immersion", icon: Headset },
+];
 const BAR_LABEL = "Actions du village";
 
-export default function ActionBar({ open, onOpen, hunting, found, panels, titles }: ActionBarProps) {
+export default function ActionBar<T extends string = PanelId>({ open, onOpen, hunting, found, panels, titles, items = ITEMS as ActionItem<T>[], container, brand = true, forceMobile = false }: ActionBarProps<T>) {
   const bar = useRef<HTMLElement>(null);
-  const title = (id: PanelId) => titles?.[id] ?? TITLES[id];
+  const title = (id: T) => titles?.[id] ?? items.find(item => item.id === id)?.title ?? id;
   // Closing returns focus to the entry that opened the panel, so keyboard users never lose their place.
   function close() {
     if (!open) return;
@@ -29,11 +42,10 @@ export default function ActionBar({ open, onOpen, hunting, found, panels, titles
   }
   return <>
     {/* Hidden on phones: the tour chip needs that width. The welcome screen already carries the title. */}
-    <p className="glass pointer-events-none absolute left-4 top-4 z-10 hidden rounded-full px-3 py-1 font-heading text-lg font-semibold text-primary sm:block">Village de Noël</p>
-    <nav ref={bar} aria-label={BAR_LABEL} className="absolute inset-x-0 bottom-0 z-10 flex justify-center px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-4">
-      <div className="glass grid w-full max-w-lg grid-cols-5 gap-2 rounded-2xl p-2">
-        {IDS.map(id => {
-          const Icon = ICONS[id];
+    {brand && <p className="glass pointer-events-none absolute left-4 top-4 z-10 hidden rounded-full px-3 py-1 font-heading text-lg font-semibold text-primary sm:block">Village de Noël</p>}
+    <nav ref={bar} aria-label={BAR_LABEL} className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-center px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-4">
+      <div className="glass pointer-events-auto grid w-full max-w-lg grid-cols-5 gap-2 rounded-2xl p-2">
+        {items.map(({ id, icon: Icon }) => {
           return <Button key={id} variant="ghost" data-panel={id} aria-pressed={open === id} onClick={() => open === id ? close() : onOpen(id)}
             className="relative h-auto min-h-11 flex-col gap-1 px-1 py-2 text-xs aria-pressed:bg-accent aria-pressed:text-accent-foreground [&_svg]:size-5">
             <Icon aria-hidden />
@@ -44,12 +56,17 @@ export default function ActionBar({ open, onOpen, hunting, found, panels, titles
       </div>
     </nav>
     {/* After the bar in DOM order so Tab moves from the active entry into the panel. */}
-    {open && <Panel id={open} title={title(open)} open onClose={close}>{panels[open]}</Panel>}
+    {open && <Panel id={open} title={title(open)} open onClose={close} container={container} forceMobile={forceMobile}>{panels[open]}</Panel>}
   </>;
 }
 
-export function Panel({ id, title, open, onClose, children }: { id: PanelId; title: string; open: boolean; onClose: () => void; children: ReactNode }) {
-  const mobile = useIsMobile();
+export function Panel({ id, title, open, onClose, children, container, forceMobile = false }: {
+  id: string; title: string; open: boolean; onClose: () => void; children: ReactNode; container?: HTMLElement | null | undefined; forceMobile?: boolean;
+}) {
+  // With a container (AR DOM overlay) the panel docks above the bar inside it: vaul's drawer stays modal
+  // (it hides the rest of the overlay, including "Quitter l'AR") and would draw a scrim over the camera.
+  const docked = container !== undefined;
+  const mobile = (useIsMobile() || forceMobile) && !docked;
   const panel = useRef<HTMLElement>(null);
   useEffect(() => {
     if (!open || mobile) return;
@@ -71,11 +88,14 @@ export function Panel({ id, title, open, onClose, children }: { id: PanelId; tit
       </DrawerContent>
     </Drawer>;
   }
-  return <section ref={panel} role="dialog" aria-labelledby={`panel-${id}-title`} className="glass absolute bottom-24 left-1/2 z-10 max-h-[60dvh] w-[min(360px,calc(100%-2rem))] -translate-x-1/2 overflow-y-auto rounded-2xl p-4 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-200">
+  const card = <section ref={panel} role="dialog" aria-labelledby={`panel-${id}-title`} className={cn("glass absolute left-1/2 z-10 -translate-x-1/2 overflow-y-auto rounded-2xl p-4 motion-safe:animate-in",
+    docked ? "pointer-events-auto bottom-[calc(5.5rem+env(safe-area-inset-bottom))] max-h-[55dvh] w-[min(32rem,calc(100%-1rem))]" : "bottom-24 max-h-[60dvh] w-[min(360px,calc(100%-2rem))]",
+    " motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-200")}>
     <header className="mb-3 flex items-center justify-between gap-2">
       <h2 id={`panel-${id}-title`} className="text-xl font-semibold">{title}</h2>
       <Button variant="ghost" size="icon" className="min-h-11 min-w-11" aria-label="Fermer" title="Fermer" onClick={onClose}><X aria-hidden /></Button>
     </header>
     {children}
   </section>;
+  return container ? createPortal(card, container) : card;
 }
