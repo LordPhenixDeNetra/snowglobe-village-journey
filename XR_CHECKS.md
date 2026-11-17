@@ -10,11 +10,11 @@ Measured on desktop with `window.__villageStats()` (one controlled render, shado
 
 Requires a headset: 72 fps on Quest 2 at the default and overview positions, sign legibility at 3 m, walking stopping at a lamp post, the forest letting the controller ray reach the gifts under the small trees. In AR: the miniature stays inside the placed footprint (forest radius ≤ 21 m before scaling).
 
-Requires a real session: entering VR or AR must hide the welcome screen, the bar and the tour chip (they render only while no XR session is active) and bring them back on exit. The AR overlay and VR world panels keep their previous layout until the immersive-interface PR.
+Requires a real session: entering VR or AR must hide the welcome screen, the bar and the tour chip (they render only while no XR session is active) and bring them back on exit.
 
 ## Christmas activities
 Santa letters were tested with a real AI response; gift progression and decoration rules have automated tests.
-In VR, select **Poste du Père Noël**, then **Écrire / modifier** to open the world-space alphabet keyboard; send the letter and turn its pages. On AR devices with overlays, use the normal letter form. Without overlays, the world keyboard is available.
+In VR, open **Plus…** and select **Poste**, then **Écrire / modifier** to open the world-space alphabet keyboard; send the letter and turn its pages. On AR devices with overlays, use the normal letter form. Without overlays, the world keyboard is available.
 Select **Cadeaux**, find all five packages and aim the ray/trigger (VR) or tap (AR) to collect them. The fifth starts fireworks above the tree. Tree controls add colored ornaments, up to three garlands and three star effects.
 Actual headset keyboard targeting, ray collection and smartphone taps remain unverified without XR hardware. Activity progress is session-only and resets on reload; letters are not stored by the app.
 
@@ -27,15 +27,24 @@ Actual headset keyboard targeting, ray collection and smartphone taps remain unv
 ## Requires real hardware
 The sandbox has no XR headset, tracked controllers, camera surfaces, speakers or real GPU. Actual session entry, controller rays, comfort, AR tracking and performance remain unverified.
 
+## Immersive interface
+The VR controls are one glass panel that follows the head at 1.4 m: a first row **Précédent** · **n/N · place** (re-aims at the stop) · **Suivant**, a second row **Écouter / Couper le conteur**, **Répéter la voix**, **Point de vue suivant**, then **Plus…**, which reveals rotation, ambience, snow, the three activities (**Poste**, **Cadeaux · n/5**, **Sapin**, their tools appearing to the right of the panel) and **Quitter la VR**. The tour note is the panel title. Buttons light up with a gold outline and grow slightly under the controller ray; disabled buttons are dimmed and ignore the trigger. **Plus…** starts folded on every VR entry.
+
+The AR DOM overlay reuses the bottom action bar with five entries (Parcours, Activités, Ambiance, Conteur, Maquette); the open panel docks above the bar inside the overlay. **Quitter l’AR** sits alone at the top right. Before placement a status pill reads "Recherche d’une surface horizontale…" then "Surface détectée", with a large gold **Poser le village** button; the reticle is a soft gold ring with a pulsing centre dot (static under reduced motion). "Suivi interrompu…" shows in the same pill when the anchor is lost. Without DOM overlays the same groups appear as one world-space glass panel.
+
+Verified in the sandbox: panel rows, layout, label wrapping and the AR fallback rows have unit tests; the overlay (status, disabled place button, five entries, panel mounted inside the overlay, `beforexrselect` blocked) has DOM tests; the overlay was captured at 390 × 844 (no horizontal overflow, every button ≥ 44 px) and the VR panel, its **Plus…** state, its hover state and the AR fallback panel were rendered at 1440 × 900 outside a session.
+
+Requires a headset or phone: panel legibility at 1.4 m on Quest 2, ray hover feedback, the haptic pulse on each panel action, overlay taps never placing the village, safe areas on notched phones.
+
 ### VR
 Open the published HTTPS app directly in a WebXR-compatible headset browser. Create a personalized tour before selecting **Entrer en VR**.
 
 1. Aim the controller teleport arc at open snow and release the teleport action. Your feet should stay at ground height; the tree, buildings and outer forest must reject landing.
-2. Use the right thumbstick to turn. Default turning is 30-degree snaps; select **Rotation fluide** for continuous turning.
+2. Use the right thumbstick to turn. Default turning is 30-degree snaps; open **Plus…** and select **Rotation par à-coups** to switch to continuous turning (the label then reads **Rotation fluide**).
 3. Select **Point de vue suivant**, then **Suivant** and **Précédent**. The viewpoint and sleigh destination should follow the selected place.
 4. Turn your head: the world must stay stable and the controls remain in front of you.
-5. Select **Quitter la VR** and confirm the desktop village returns.
-6. With a tour active, press the right controller's A/B buttons for next/previous stops where those buttons exist. Controller rays and triggers select the world buttons on other layouts; optional vibration confirms tour-button actions and teleportation.
+5. Open **Plus…**, check the extra rows appear below without covering the first two, select **Quitter la VR** and confirm the desktop village returns. Re-enter VR: **Plus…** must be folded again.
+6. With a tour active, press the right controller's A/B buttons for next/previous stops where those buttons exist. Controller rays and triggers select the panel buttons; aiming at one must outline it in gold before the trigger. Optional vibration confirms every panel action and teleportation.
 7. Disconnect the left controller: the right thumbstick must still rotate. Reconnect the left controller and verify walking resumes.
 
 ### Ground walking in VR
@@ -51,19 +60,19 @@ Walking direction, easing, speed limits and blocked destinations are unit-tested
 ### AR
 Open the published HTTPS app directly in a browser with immersive WebXR AR and hit-test support (not all mobile browsers support it), then select **Entrer en AR**.
 
-1. Allow camera access and scan a well-lit table. A horizontal placement ring should appear.
-2. Tap the ring or **Poser le village**. The miniature should stay fixed to that location without a sky obscuring the camera view.
-3. Adjust **Taille de la maquette** and **Orientation**, select **Repositionner**, and place it elsewhere.
-4. A pre-created tour should retain Next/Previous controls on devices supporting DOM overlays.
-5. Select **Quitter l’AR** or use the browser's session exit.
+1. Allow camera access and scan a well-lit table. The top pill reads "Recherche d’une surface horizontale…", then "Surface détectée" when a soft gold ring with a pulsing dot appears.
+2. Tap the ring or the large **Poser le village** button. The miniature should stay fixed to that location without a sky obscuring the camera view.
+3. Open **Maquette** in the bottom bar, adjust **Taille** and **Orientation**, select **Repositionner**, and place it elsewhere.
+4. A pre-created tour shows its stop, note and Previous/Next under **Parcours**; **Activités**, **Ambiance** and **Conteur** open one panel at a time above the bar, and tapping the active entry again closes it.
+5. Select **Quitter l’AR** (top right, always visible) or use the browser's session exit.
 
-AR placement requests a session anchor when supported and falls back to a fixed XR world position otherwise; it is not a persistent cross-session save. Anchored models hide while their pose is unavailable and return when tracking recovers. Devices without DOM overlays receive world-space placement, resizing, rotation, tour and exit controls. Check that overlay taps never also place the village. Snow, lights and the tour sleigh continue animating after placement; activate music before entering immersion if desired.
+AR placement requests a session anchor when supported and falls back to a fixed XR world position otherwise; it is not a persistent cross-session save. Anchored models hide while their pose is unavailable and return when tracking recovers. Devices without DOM overlays receive one world-space glass panel with placement, tour, storyteller, resizing, rotation, ambience, activities, reposition and exit. Check that overlay taps never also place the village. Snow, lights and the tour sleigh continue animating after placement; activate music before entering immersion if desired.
 
 Open the published HTTPS app directly, outside an embedded preview, on a browser supporting immersive WebXR. A smartphone camera alone is not enough: browsers without immersive AR/hit-test cannot place this interactive village (including many iPhone browsers). Tracking stability, performance, audio continuity, controller models and device input still require these hardware checks.
 
 ### AR storyteller and spatial ambience
 1. Create a personalized tour, enter AR and place the village, then tap **Écouter le conteur**. There is no automatic audio before this gesture.
-2. The voice reads the current stop in French. Tap Next/Previous: the previous sentence must stop and the new stop should be narrated. **Répéter la narration** replays only the active stop.
+2. The voice reads the current stop in French (controls under **Conteur**). Tap Next/Previous under **Parcours**: the previous sentence must stop and the new stop should be narrated. **Répéter la narration** replays only the active stop.
 3. With stereo headphones, move around the table: bells are at the Grand Sapin and crackling wood at the Chalet des Contes. Resize/rotate the miniature: sources must stay attached to their places.
 4. Music and ambience should become quieter during speech. **Couper le conteur**, repositioning, lost tracking or leaving AR stops narration and ambience.
 5. Browser French voices differ by device; if unavailable, the app reports the failure and keeps visual navigation. Actual voice quality, stereo perception and device gesture policies cannot be verified in the sandbox.
