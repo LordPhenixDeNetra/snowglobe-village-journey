@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useFrame } from "@react-three/fiber";
+import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import { GIFTS, huntComplete, ornamentPosition, type Decoration } from "@/lib/village-activities";
 import { PLACES } from "@/lib/village-places";
 import { useWeatherColors } from "./VillageWeather";
+import { useMerged } from "./scene/geometry";
 import type { ActivityProps } from "./ActivityControls";
 
 export function TreeDecorations({ decoration }: { decoration: Decoration }) {
@@ -28,17 +29,38 @@ export function TreeDecorations({ decoration }: { decoration: Decoration }) {
   </group>;
 }
 
-function GiftPackage({ position, index, onCollect }: { position: [number, number, number]; index: number; onCollect: () => void }) {
+// All remaining gifts in 2 instanced meshes (wrapping + gold ribbons): 3 draw calls with the shadow pass, whatever the count.
+function GiftPackages({ gifts, onCollect }: { gifts: (typeof GIFTS)[number][]; onCollect: (id: string) => void }) {
   const colors = useWeatherColors();
-  const [hover, setHover] = useState(false);
-  const color = colors[index % 2 ? "blue" : "red"] ?? new THREE.Color();
-  return <group position={position} onClick={event => { event.stopPropagation(); onCollect(); }} onPointerOver={() => setHover(true)} onPointerOut={() => setHover(false)}>
-    <mesh position-y={0.3} castShadow><boxGeometry args={[0.65, 0.6, 0.65]} /><meshStandardMaterial color={color} roughness={0.4} emissive={color} emissiveIntensity={hover ? 0.7 : 0.08} /></mesh>
-    <mesh position-y={0.61}><boxGeometry args={[0.7, 0.09, 0.7]} /><meshStandardMaterial color={color} /></mesh>
-    <mesh position-y={0.35}><boxGeometry args={[0.1, 0.72, 0.71]} /><meshStandardMaterial color={(colors["gold"] ?? new THREE.Color())} metalness={0.5} roughness={0.2} /></mesh>
-    <mesh position-y={0.35}><boxGeometry args={[0.71, 0.72, 0.1]} /><meshStandardMaterial color={(colors["gold"] ?? new THREE.Color())} metalness={0.5} roughness={0.2} /></mesh>
-    {[-1, 1].map(side => <mesh key={side} position={[side * 0.12, 0.76, 0]} rotation-y={Math.PI / 2} rotation-z={side * 0.4}><torusGeometry args={[0.12, 0.028, 5, 12]} /><meshStandardMaterial color={(colors["gold"] ?? new THREE.Color())} /></mesh>)}
-  </group>;
+  const [hover, setHover] = useState<number | null>(null);
+  const body = useRef<THREE.InstancedMesh>(null), ribbon = useRef<THREE.InstancedMesh>(null);
+  const wrapping = useMerged(() => [{ geometry: new THREE.BoxGeometry(0.65, 0.6, 0.65), position: [0, 0.3, 0] }, { geometry: new THREE.BoxGeometry(0.7, 0.09, 0.7), position: [0, 0.61, 0] }], []);
+  const ribbons = useMerged(() => [
+    { geometry: new THREE.BoxGeometry(0.1, 0.72, 0.71), position: [0, 0.35, 0] }, { geometry: new THREE.BoxGeometry(0.71, 0.72, 0.1), position: [0, 0.35, 0] },
+    ...[-1, 1].map(side => ({ geometry: new THREE.TorusGeometry(0.12, 0.028, 5, 12), position: [side * 0.12, 0.76, 0] as [number, number, number], rotation: [0, Math.PI / 2, side * 0.4] as [number, number, number] })),
+  ], []);
+  useEffect(() => {
+    const matrix = new THREE.Matrix4(), color = new THREE.Color();
+    for (const mesh of [body.current, ribbon.current]) {
+      if (!mesh) continue;
+      gifts.forEach((gift, i) => {
+        mesh.setMatrixAt(i, matrix.makeTranslation(...gift.pos));
+        if (mesh === body.current) mesh.setColorAt(i, color.copy(colors[GIFTS.indexOf(gift) % 2 ? "blue" : "red"] ?? color.set(0, 0, 0)).multiplyScalar(hover === i ? 2.2 : 1));
+      });
+      mesh.count = gifts.length;
+      mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+      mesh.computeBoundingSphere();
+    }
+  }, [gifts, colors, hover]);
+  const events = {
+    onClick: (event: ThreeEvent<MouseEvent>) => { event.stopPropagation(); const gift = gifts[event.instanceId ?? -1]; if (gift) onCollect(gift.id); },
+    onPointerMove: (event: ThreeEvent<PointerEvent>) => setHover(event.instanceId ?? null), onPointerOut: () => setHover(null),
+  };
+  return <>
+    <instancedMesh ref={body} args={[wrapping, undefined, GIFTS.length]} castShadow {...events}><meshStandardMaterial roughness={0.4} /></instancedMesh>
+    <instancedMesh ref={ribbon} args={[ribbons, undefined, GIFTS.length]} {...events}><meshStandardMaterial color={(colors["gold"] ?? new THREE.Color())} metalness={0.5} roughness={0.2} /></instancedMesh>
+  </>;
 }
 
 export function Fireworks() {
@@ -60,9 +82,10 @@ export function Fireworks() {
 export default function VillageActivities({ props, onCollect }: { props: ActivityProps; onCollect: (id: string) => void }) {
   const colors = useWeatherColors();
   const post = PLACES.find(place => place.id === "poste-pere-noel");
+  const remaining = useMemo(() => GIFTS.filter(gift => !props.found.includes(gift.id)), [props.found]);
   return <>
     {post && <group position={[post.pos[0] + 1.2, 0, post.pos[2] - 1.2]} onClick={e => { e.stopPropagation(); props.onActivity("letter"); }}><mesh position-y={0.55}><cylinderGeometry args={[0.07, 0.07, 1.1, 8]} /><meshStandardMaterial color={(colors["gold"] ?? new THREE.Color())} /></mesh><mesh position-y={1.25}><boxGeometry args={[0.6, 0.45, 0.45]} /><meshStandardMaterial color={(colors["red"] ?? new THREE.Color())} /></mesh></group>}
-    {props.hunting && GIFTS.filter(gift => !props.found.includes(gift.id)).map(gift => <GiftPackage key={gift.id} position={gift.pos} index={GIFTS.findIndex(item => item.id === gift.id)} onCollect={() => onCollect(gift.id)} />)}
+    {props.hunting && <GiftPackages gifts={remaining} onCollect={onCollect} />}
     {props.hunting && huntComplete(props.found) && <Fireworks />}
   </>;
 }

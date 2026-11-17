@@ -3,9 +3,10 @@ import { PLACES } from "@/lib/village-places";
 import { GIFTS } from "@/lib/village-activities";
 import { sleighDestination } from "@/lib/sleigh-motion";
 import { viewpoint } from "@/lib/xr-navigation";
-import { CHALETS, LAMP_POSTS, OBSTACLES, LAKE, PADDOCK, TREE_TIERS, treeRadiusAt, insideLake, forestPlacements, forestMatrices, garlandSpans, lampPoolOpacity, pathLayout, seeded, REINDEER, PADDOCK_FENCE, ELVES, SANTA, SKATERS, routeLength, sampleRoute, type Route } from "@/lib/village-props";
+import { CHALETS, LAMP_POSTS, OBSTACLES, LAKE, PADDOCK, TREE_TIERS, treeRadiusAt, insideLake, forestPlacements, forestMatrices, garlandSpans, garlandPoint, lampPoolOpacity, pathLayout, seeded, REINDEER, PADDOCK_FENCE, ELVES, SANTA, SKATERS, routeLength, sampleRoute, type Route, type XZ } from "@/lib/village-props";
 import { GIFTS as HUNT, ornamentPosition } from "@/lib/village-activities";
 import { SLEIGH_HOME, sleighPosition, type SleighPosition } from "@/lib/sleigh-motion";
+import { followRoute, startWalker } from "@/lib/gait";
 import * as THREE from "three";
 
 const d = (a: readonly number[], b: readonly number[]) => Math.hypot((a[0] ?? 0) - (b[0] ?? 0), (a[1] ?? 0) - (b[1] ?? 0));
@@ -49,7 +50,11 @@ describe("village props", () => {
   it("la forêt est déterministe, dans la couronne 13–21 m, hors de l'enclos et loin des cadeaux", () => {
     const trees = forestPlacements();
     expect(trees).toHaveLength(82);
-    expect(trees[0]).toMatchObject({ x: -11.3, z: -3, scale: 1.4 });
+    // Ruling: the two gift trees moved 0.65 m outward (trunk no longer through the gift), no longer on the gift centre.
+    for (const [i, id] of [[0, "foret"], [1, "clairiere"]] as const) {
+      const gift = GIFTS.find(g => g.id === id)!;
+      expect(trees[i]).toMatchObject({ x: expect.closeTo(gift.pos[0] * (1 + 0.65 / Math.hypot(gift.pos[0], gift.pos[2])), 5), z: expect.closeTo(gift.pos[2] * (1 + 0.65 / Math.hypot(gift.pos[0], gift.pos[2])), 5), scale: 1.4 });
+    }
     expect(forestPlacements()).toEqual(trees);
     for (const t of trees.slice(2)) {
       const r = Math.hypot(t.x, t.z);
@@ -92,11 +97,32 @@ describe("village props", () => {
     const { trunks, tiers, caps } = forestMatrices();
     expect(trunks).toHaveLength(82); expect(tiers).toHaveLength(246); expect(caps).toHaveLength(82);
     const position = new THREE.Vector3().setFromMatrixPosition(trunks[0]!);
-    expect(position.toArray()).toEqual([-11.3, expect.closeTo(0.84, 5), -3]);
-    for (const gift of HUNT.filter(g => g.id === "foret" || g.id === "clairiere")) {
-      const lowest = tiers.map(m => new THREE.Vector3().setFromMatrixPosition(m)).filter(p => d([p.x, p.z], [gift.pos[0], gift.pos[2]]) < 0.01);
+    // Ruling: the gift tree sits 0.65 m outward of its gift, so the matrices follow forestPlacements()[0], not the gift.
+    const first = forestPlacements()[0]!;
+    expect(position.toArray()).toEqual([expect.closeTo(first.x, 5), expect.closeTo(0.84, 5), expect.closeTo(first.z, 5)]);
+    for (const [i, gift] of HUNT.filter(g => g.id === "foret" || g.id === "clairiere").entries()) {
+      const tree = forestPlacements()[i]!;
+      const lowest = tiers.map(m => new THREE.Vector3().setFromMatrixPosition(m)).filter(p => d([p.x, p.z], [tree.x, tree.z]) < 0.01);
+      expect(lowest).toHaveLength(3);
       // Skirt bottom = centre − half the 1.1 m cone × scale 1.4: above the 0.8 m gift.
       expect(Math.min(...lowest.map(p => p.y)) - 0.55 * 1.4).toBeGreaterThan(0.8);
+    }
+  });
+  it("les petits sapins des cadeaux : tronc à l'écart du cadeau, cadeau sous la jupe", () => {
+    const trees = forestPlacements();
+    for (const [i, id] of [[0, "foret"], [1, "clairiere"]] as const) {
+      const gift = GIFTS.find(g => g.id === id)!, tree = trees[i]!;
+      const gap = d([tree.x, tree.z], [gift.pos[0], gift.pos[2]]);
+      expect(gap).toBeGreaterThanOrEqual(0.45);
+      expect(gap).toBeGreaterThanOrEqual(0.17 * tree.scale + 0.35);           // trunk foot radius + half the gift lid
+      expect(gap + 0.35 * Math.SQRT2).toBeLessThanOrEqual(0.95 * tree.scale); // gift corner still under the lowest skirt
+    }
+  });
+  it("les guirlandes passent au-dessus d'un visiteur VR (≥ 2,6 m)", () => {
+    for (const { from, to } of garlandSpans()) for (let i = 0; i <= 100; i++) {
+      const [x, y, z] = garlandPoint(from, to, i / 100);
+      expect(y).toBeGreaterThanOrEqual(2.6);
+      if (i === 0) expect([x, z]).toEqual(from);
     }
   });
   it("huit guirlandes entre chalets voisins, opacité des halos par ambiance, graine stable", () => {
@@ -106,27 +132,49 @@ describe("village props", () => {
     expect(lampPoolOpacity("night")).toBe(0.9);
     expect(seeded(7)()).toBe(seeded(7)());
   });
-  it("les rennes restent dans l'enclos, loin de la clôture", () => {
+  it("les rennes restent dans l'enclos, loin de la clôture, tête comprise", () => {
     for (const r of REINDEER) for (const p of r.route ? sampleRoute(r.route) : [r.at]) expect(d(p, PADDOCK.center)).toBeLessThanOrEqual(PADDOCK.r - 0.6);
+    // Footprint: the head reaches 1.3 m ahead of the body centre; it never passes the fence line (the trotting head is also above the 1.1 m rails).
+    const HEAD = 1.3;
+    for (const r of REINDEER) {
+      if (!r.route) { expect(d([r.at[0] + HEAD * Math.sin(r.yaw), r.at[1] + HEAD * Math.cos(r.yaw)], PADDOCK.center)).toBeLessThanOrEqual(PADDOCK.r); continue; }
+      const w = startWalker(r.route);
+      for (let i = 0; i < 400; i++) {
+        followRoute(w, r.route, 1.1, 0.05, 3);
+        expect(d([w.position[0] + HEAD * Math.sin(w.yaw), w.position[1] + HEAD * Math.cos(w.yaw)], PADDOCK.center)).toBeLessThanOrEqual(PADDOCK.r);
+      }
+    }
     expect(PADDOCK_FENCE.length).toBe(12);
     expect(Math.hypot(...PADDOCK.center) + PADDOCK.r).toBeLessThan(21); // AR : rayon 23
   });
-  it("lutins et Père Noël ne traversent ni chalet, ni lampadaire, ni sapin, et laissent libres points de vue, parking du traîneau et cadeaux", () => {
-    const spots = [...ELVES.flatMap(e => e.route ? sampleRoute(e.route) : [e.at]), SANTA.at];
-    for (const p of spots) {
-      expect(Math.hypot(...p)).toBeGreaterThan(3.3);                       // sapin (rayon 2,6 au pied)
-      for (const c of CHALETS) { const place = PLACES.find(x => x.id === c.id)!; expect(d(p, [place.pos[0], place.pos[2]])).toBeGreaterThan(1.9); }
-      for (const post of LAMP_POSTS) expect(d(p, post)).toBeGreaterThan(0.7);
-      for (const place of PLACES) { const [vx, , vz] = viewpoint(place); expect(d(p, [vx, vz])).toBeGreaterThan(0.8); const s = sleighDestination(place.id)!; expect(d(p, [s[0], s[2]])).toBeGreaterThan(1.6); }
-      for (const g of GIFTS) expect(d(p, [g.pos[0], g.pos[2]])).toBeGreaterThan(1);
-      expect(insideLake(p[0], p[1], 0.3)).toBe(false);
-      expect(d(p, [SLEIGH_HOME[0], SLEIGH_HOME[2]])).toBeGreaterThan(1.8);    // traîneau garé hors visite
-      for (const place of PLACES.filter(x => x.id.startsWith("bonhomme"))) expect(d(p, [place.pos[0], place.pos[2]])).toBeGreaterThan(1.1);
+  it("lutins et Père Noël, emprise comprise, ne traversent ni chalet, ni lampadaire, ni sapin, et laissent libres points de vue, parking du traîneau et cadeaux", () => {
+    // Footprint radii: walking elf 0.4 m (gift held in front), other elves 0.4 m (workbench), Santa 0.5 m.
+    const spots: [XZ, number][] = [...ELVES.flatMap(e => (e.route ? sampleRoute(e.route) : [e.at]).map(p => [p, 0.4] as [XZ, number])), [SANTA.at, 0.5]];
+    for (const [p, r] of spots) {
+      expect(Math.hypot(...p) - r).toBeGreaterThan(2.8);                    // sapin (rayon 2,6 au pied, cadeaux du socle)
+      for (const c of CHALETS) { const place = PLACES.find(x => x.id === c.id)!; expect(d(p, [place.pos[0], place.pos[2]]) - r).toBeGreaterThan(1.45); }
+      for (const post of LAMP_POSTS) expect(d(p, post) - r).toBeGreaterThan(0.25);
+      for (const place of PLACES) { const [vx, , vz] = viewpoint(place); expect(d(p, [vx, vz]) - r).toBeGreaterThan(0.35); const s = sleighDestination(place.id)!; expect(d(p, [s[0], s[2]]) - r).toBeGreaterThan(1.1); }
+      for (const g of GIFTS) expect(d(p, [g.pos[0], g.pos[2]]) - r).toBeGreaterThan(0.5);
+      expect(insideLake(p[0], p[1], 0.3 + r)).toBe(false);
+      expect(d(p, [SLEIGH_HOME[0], SLEIGH_HOME[2]]) - r).toBeGreaterThan(1.3);    // traîneau garé hors visite
+      for (const place of PLACES.filter(x => x.id.startsWith("bonhomme"))) expect(d(p, [place.pos[0], place.pos[2]]) - r).toBeGreaterThan(0.6);
     }
   });
   it("les patineurs restent sur la glace", () => {
     expect(SKATERS).toHaveLength(2);
     for (const s of SKATERS) for (const p of sampleRoute(s.route)) expect(insideLake(p[0], p[1], -0.3)).toBe(true);
+  });
+  it("les patineurs, sur leurs trajets réels, gardent leurs mains à 0,5 m l'une de l'autre", () => {
+    // Same start as Villagers: the second skater begins `phase` of a loop ahead, both at 1.4 m/s.
+    const walkers = SKATERS.map(s => { const w = startWalker(s.route); followRoute(w, s.route, s.phase * routeLength(s.route) / 0.05, 0.05, Infinity); return w; });
+    let closest = Infinity;
+    for (let i = 0; i < 2000; i++) {
+      SKATERS.forEach((s, k) => followRoute(walkers[k]!, s.route, 1.4, 0.01, 3));
+      closest = Math.min(closest, d(walkers[0]!.position, walkers[1]!.position));
+    }
+    // Ruling: 1.6 m cannot fit on a figure eight inside this ice (best ≈ 1.53 m); 2 × 0.5 m reach + 0.5 m gap = 1.5 m.
+    expect(closest).toBeGreaterThanOrEqual(2 * 0.5 + 0.5);
   });
   it("routeLength et sampleRoute sont cohérents", () => {
     const square: Route = { points: [[0, 0], [1, 0], [1, 1], [0, 1]], loop: true };

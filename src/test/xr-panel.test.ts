@@ -17,9 +17,10 @@ describe("panneau VR", () => {
     expect(rows.flat().find(b => b.id === "hunt")).toMatchObject({ label: "Cadeaux · 2/5", pressed: true });
     expect(rows.flat().find(b => b.id === "more")!.label).toBe("Moins");
   });
-  it("hors parcours : promenade libre, navigation désactivée", () => {
+  it("hors parcours : promenade libre, navigation et étiquette désactivées", () => {
     const rows = vrPanelRows({ ...base, focusName: null, count: 0 });
-    expect(rows[0]!.map(b => b.disabled)).toEqual([true, false, true]); expect(rows[0]![1]!.label).toBe("Promenade libre");
+    // Ruling: "Promenade libre" did nothing when pressed; it is now shown disabled like the arrows ([true, false, true] before).
+    expect(rows[0]!.map(b => b.disabled)).toEqual([true, true, true]); expect(rows[0]![1]!.label).toBe("Promenade libre");
   });
   it("erreur audio : une ligne large en dernier", () => {
     const rows = vrPanelRows({ ...base, audio: { ...base.audio, error: "Voix indisponible" } });
@@ -49,6 +50,8 @@ describe("repli AR sans overlay", () => {
   it("après la pose : replié par défaut pour laisser voir la maquette, Quitter toujours accessible", () => {
     const rows = arPanelRows({ ...base, placed: true, surface: true, more: false });
     expect(rows.map(r => r.map(b => b.id))).toEqual([["prev", "stop", "next"], ["narrator", "repeat"], ["more", "exit"]]);
+    // The AR fallback has no "visit" action: the stop label is shown, not pressable.
+    expect(rows[0]![1]).toMatchObject({ label: "1/3 · La Chocolaterie", disabled: true });
     expect(arPanelRows({ ...base, focusName: null, count: 0, placed: true, surface: true, more: false })[0]!.map(b => b.id)).toEqual(["narrator", "repeat"]);
   });
   it("après la pose, Plus… : maquette, ambiance, activités, repositionner", () => {

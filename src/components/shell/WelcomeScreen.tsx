@@ -37,14 +37,14 @@ export default function WelcomeScreen({ onEnter, ...props }: WelcomeProps) {
     {/* my-auto instead of items-center: a card taller than the viewport (phone landscape) stays scrollable from its top. */}
     <div className="glass my-auto w-full max-w-xl space-y-5 rounded-2xl p-6 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-4 motion-safe:duration-500">
       <header className="space-y-1 text-center">
-        <h1 id="welcome-title" className="text-4xl font-semibold tracking-wide text-primary drop-shadow sm:text-5xl">Village de Noël</h1>
+        <h1 id="welcome-title" className="text-[2.5rem] font-semibold leading-tight tracking-wide text-primary drop-shadow sm:text-5xl">Village de Noël</h1>
         <p className="text-base text-muted-foreground">Une promenade magique, en 3D, en VR ou en AR</p>
       </header>
       <WishForm {...props}>
         <Button type="button" variant="outline" className="min-h-11 flex-1 text-base" onClick={onEnter}>Visiter librement<ArrowRight aria-hidden /></Button>
       </WishForm>
       <XRButtons {...props} />
-      <p className="text-center text-xs text-muted-foreground">Musique et sons démarrent sur votre geste · Expérience WebXR</p>
+      <p className="text-center text-[0.8125rem] text-muted-foreground">Musique et sons démarrent sur votre geste · Expérience WebXR</p>
     </div>
   </section>;
 }

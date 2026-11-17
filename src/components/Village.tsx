@@ -16,7 +16,8 @@ import Chalet from "./scene/Chalet";
 import { BigTree, Forest, Ground, Lake, Snowman } from "./scene/nature";
 import { Garlands, LampPosts } from "./scene/lights";
 import StatsProbe from "./scene/StatsProbe";
-import { Herd, Paddock, Villagers } from "./scene/characters";
+import { SceneErrorBoundary } from "./scene/SceneErrorBoundary";
+import { CharacterShadows, Herd, Paddock, Villagers } from "./scene/characters";
 import WeatherControls from "./WeatherControls";
 import { snowfall, type Ambience } from "@/lib/village-weather";
 import ActivityControls, { type Activity, type ActivityProps } from "./ActivityControls";
@@ -183,8 +184,9 @@ function Scene({ focus, mode, teleport, ambience, snow, activities, onCollect, i
       <Paddock shadows={shadows} />
       <Herd shadows={shadows} />
       <Villagers activity={activities.activity} onSanta={() => activities.onActivity("letter")} shadows={shadows} />
+      <CharacterShadows />
       <Snow intensity={snow} />
-      <Suspense fallback={null}><SantaSleigh stopId={focus?.id} /></Suspense>
+      <SceneErrorBoundary><Suspense fallback={null}><SantaSleigh stopId={focus?.id} /></Suspense></SceneErrorBoundary>
       {focus && <Marker place={focus} />}
       {mode === "desktop" && <><CameraRig focus={focus} />
       <OrbitControls makeDefault target={[0, 2, 0]} maxPolarAngle={Math.PI / 2.1} minDistance={4} maxDistance={30} autoRotate={idle} autoRotateSpeed={0.4} /></>}
@@ -229,6 +231,9 @@ export default function Village() {
     onGarland: () => setDecoration(addGarland), onStar: star => setDecoration(current => ({ ...current, star })),
     onResetTree: () => setDecoration(INITIAL_DECORATION),
   };
+  // A click in the scene (tree, mailbox, Santa) also opens the Activities panel; hidden while immersed.
+  // Scene clicks open the Activities panel on desktop only: from inside a session it would pop open on exit.
+  const sceneActivities: ActivityProps = { ...activities, onActivity: value => { activities.onActivity(value); if (value && !store.getState().session) setPanel("activities"); } };
   function collect(id: string) { setFound(current => collectGift(current, id)); }
   useEffect(() => store.subscribe(state => setImmersed(!!state.session)), []);
   async function enter(mode: "VR" | "AR") {
@@ -266,7 +271,7 @@ export default function Village() {
             onStep={moveStep}
             scale={arScale} onScale={value => setArScale(scaleForAR(value))}
             ambience={ambience} onAmbience={setAmbience} snow={snow} onSnow={setSnow}
-            renderScene={(mode, teleport) => <Scene focus={focus} mode={mode} teleport={teleport} ambience={ambience} snow={snow} activities={activities} onCollect={collect} idle={welcome && !reducedMotion && !immersed} />} />
+            renderScene={(mode, teleport) => <Scene focus={focus} mode={mode} teleport={teleport} ambience={ambience} snow={snow} activities={sceneActivities} onCollect={collect} idle={welcome && !reducedMotion && !immersed} />} />
         </XR>
       </Canvas>
       {/* The audio element lives here so panels can open and close without stopping playback. */}

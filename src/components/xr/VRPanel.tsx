@@ -49,7 +49,8 @@ export default function VRPanel(props: VRPanelProps) {
     else if (id === "rotation") onSmooth(!smooth);
     else if (id === "exit") void session?.end();
     else pressShared(id, props);
-    pulse(session);
+    // "stop" and "viewpoint" move the visitor: land() already pulses for them.
+    if (id !== "stop" && id !== "viewpoint") pulse(session);
   }
   // 0.6 keeps the canvas text at today's physical size (≈4 cm) while the wider hierarchy stays in view at 1.4 m.
   return <WorldPanel rows={rows} onPress={press} title={focus ? note || focus.name : "Village de Noël"} position={[0, 0.4, 0]} scale={0.6} />;

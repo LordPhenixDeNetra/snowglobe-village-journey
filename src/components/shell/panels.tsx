@@ -22,7 +22,7 @@ export function TourPanel({ tour, step, focusName, note, onStep, onReset, ...for
 
 export function ImmersionPanel(props: XRButtonsProps) {
   return <div className="space-y-3">
-    <p className="text-sm text-muted-foreground">Créez d'abord un parcours pour le suivre dans le casque ou sur la table.</p>
+    <p className="text-sm text-muted-foreground">Entrez dans le casque ou posez le village sur une table ; un parcours se suit aussi en immersion.</p>
     <XRButtons {...props} />
   </div>;
 }

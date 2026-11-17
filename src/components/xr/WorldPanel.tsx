@@ -17,7 +17,18 @@ const token = (name: string) => getComputedStyle(document.documentElement).getPr
 // Fredoka only when already loaded: the headset never waits for a remote font.
 const font = (size: number) => `600 ${size}px ${document.fonts?.check(`600 ${size}px Fredoka`) ? "Fredoka, " : ""}sans-serif`;
 
-// One canvas and texture per element, redrawn only when `key` changes and released on unmount.
+// Redraw once the page fonts have loaded: a label drawn earlier keeps the sans-serif fallback otherwise.
+function useFontsReady() {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void document.fonts?.ready.then(() => { if (live) setReady(true); });
+    return () => { live = false; };
+  }, []);
+  return ready;
+}
+
+// One canvas and texture per element, redrawn only when `key` (or the font state) changes and released on unmount.
 function useCanvasTexture(width: number, height: number, key: string, draw: (ctx: CanvasRenderingContext2D, w: number, h: number) => void) {
   const texture = useMemo(() => {
     const canvas = document.createElement("canvas");
@@ -27,6 +38,7 @@ function useCanvasTexture(width: number, height: number, key: string, draw: (ctx
     return next;
   }, [width, height]);
   useEffect(() => () => texture.dispose(), [texture]);
+  const fonts = useFontsReady();
   useEffect(() => {
     const canvas = texture.image as HTMLCanvasElement;
     const ctx = canvas.getContext("2d");
@@ -35,7 +47,7 @@ function useCanvasTexture(width: number, height: number, key: string, draw: (ctx
     draw(ctx, canvas.width, canvas.height);
     texture.needsUpdate = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `key` captures everything `draw` reads.
-  }, [texture, key]);
+  }, [texture, key, fonts]);
   return texture;
 }
 
@@ -62,7 +74,8 @@ function PanelKey({ button, position, width, onPress }: { button: PanelButton; p
     ctx.fillStyle = token(button.pressed ? "--primary-foreground" : "--foreground");
     drawLines(ctx, wrapLabel(button.label, charsFor(w - 48), 2), w / 2, h / 2, w - 48);
   });
-  return <mesh position={[position[0], position[1], 0.005]} scale={active ? 1.05 : 1}
+  // renderOrder above the glass: transparent corners must not cut holes in it when sorting puts the glass last.
+  return <mesh position={[position[0], position[1], 0.005]} scale={active ? 1.05 : 1} renderOrder={1}
     onPointerOver={e => { e.stopPropagation(); setHover(true); }}
     onPointerOut={() => setHover(false)}
     onClick={e => { e.stopPropagation(); if (!button.disabled) onPress(button.id); }}>
@@ -76,7 +89,7 @@ function PanelTitle({ text, width, y }: { text: string; width: number; y: number
     ctx.fillStyle = token("--foreground");
     drawLines(ctx, wrapLabel(text, charsFor(w - 48), 2), w / 2, h / 2, w - 48);
   });
-  return <mesh position={[0, y, 0.003]}>
+  return <mesh position={[0, y, 0.003]} renderOrder={1}>
     <planeGeometry args={[width, TITLE]} />
     <meshBasicMaterial map={texture} transparent toneMapped={false} />
   </mesh>;

@@ -14,7 +14,7 @@ export function vrPanelRows(s: PanelState): PanelButton[][] {
   const rows: PanelButton[][] = [
     [
       { id: "prev", label: "Précédent", disabled: !touring || s.step <= 0 },
-      { id: "stop", label: touring ? `${s.step + 1}/${s.count} · ${s.focusName}` : "Promenade libre", wide: true, disabled: false },
+      { id: "stop", label: touring ? `${s.step + 1}/${s.count} · ${s.focusName}` : "Promenade libre", wide: true, disabled: !touring },
       { id: "next", label: "Suivant", disabled: !touring || s.step >= s.count - 1 },
     ],
     [
@@ -97,6 +97,7 @@ export function arPanelRows(s: Omit<PanelState, "note" | "smooth"> & { placed: b
     ] : []),
     ...(s.audio.error ? [pick("audio-error")] : []),
   ];
-  if (s.focusName && s.count) rows.unshift(pick("prev", "stop", "next"));
+  // No "visit" action in AR: the stop label is shown but not pressable.
+  if (s.focusName && s.count) rows.unshift(pick("prev", "stop", "next").map(b => b.id === "stop" ? { ...b, disabled: true } : b));
   return rows;
 }

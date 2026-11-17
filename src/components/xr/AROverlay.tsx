@@ -72,11 +72,12 @@ export default function AROverlay({ state, actions }: { state: ARState; actions:
   };
   return <div ref={setRoot} data-testid="ar-overlay" className="pointer-events-none fixed inset-0 text-foreground">
     <div className="absolute inset-x-0 top-0 flex items-start gap-2 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pt-[max(1rem,env(safe-area-inset-top))]">
-      {status && <p role="status" className="glass min-w-0 rounded-2xl px-4 py-2 text-sm font-semibold">{status}</p>}
+      {/* pointer-events-auto: a tap on the pill lands in the overlay (beforexrselect blocked) instead of placing the village. */}
+      {status && <p role="status" className="glass pointer-events-auto min-w-0 rounded-2xl px-4 py-2 text-sm font-semibold">{status}</p>}
       <Button variant="ghost" className="glass pointer-events-auto ml-auto min-h-11 shrink-0 rounded-full" title="Quitter l’AR" onClick={actions.exit}><X aria-hidden />Quitter l’AR</Button>
     </div>
     {placed
-      ? <ActionBar<ARPanel> open={open} onOpen={setOpen} items={ITEMS} panels={panels} hunting={state.activities.hunting} found={state.activities.found.length} container={root} brand={false} forceMobile />
+      ? <ActionBar<ARPanel> open={open} onOpen={setOpen} items={ITEMS} panels={panels} hunting={state.activities.hunting} found={state.activities.found.length} docked brand={false} />
       : <div className="absolute inset-x-0 bottom-0 flex justify-center px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
         <Button size="lg" className="pointer-events-auto h-auto min-h-14 w-full max-w-sm rounded-2xl text-lg shadow-lg" disabled={!found} onClick={actions.place}><MapPin aria-hidden />Poser le village</Button>
       </div>}

@@ -3,11 +3,12 @@ import * as THREE from "three";
 import type { Place } from "@/lib/village-places";
 import { seeded, type ChaletVariant, type FacadeColor } from "@/lib/village-props";
 import { ChimneySmoke, useWeatherColors } from "../VillageWeather";
-import { box, useLabelTexture, useMerged, type Part } from "./geometry";
+import { box, useLabelTexture, useMerged, useTintedMerge, type Part } from "./geometry";
 
 type Props = { place: Place; variant: ChaletVariant; facade: FacadeColor; seed: number; rotation: number; shadows: boolean };
 
-// Footprint stays inside 2.9 × 2.2 m (roof overhang and snow included); doors are 2 m, the scale cue.
+// Walls ≤ 2.6 × 1.8 m, roof snow caps ≤ 3.0 × 2.3 m; the flat snow drift at the foot reaches 3.4 × 2.7 m, an ellipse
+// that still fits the 1.8 m collision radius around place.pos. Doors are 2 m, the scale cue.
 const DIMS = {
   gable: { w: 2.6, h: 2.3, d: 1.8, pitch: (40 * Math.PI) / 180, overhang: 0.15 },
   storey: { w: 2.4, h: 3.0, d: 1.8, pitch: (35 * Math.PI) / 180, overhang: 0.15 },
@@ -45,31 +46,34 @@ export default function Chalet({ place, variant, facade, seed, rotation, shadows
   const axis: "x" | "z" = variant === "aframe" ? "z" : "x";
   const halfRun = variant === "aframe" ? w / 2 : d / 2;
   const ridgeY = variant === "aframe" ? h : h + halfRun * Math.tan(pitch);
-  const front = d / 2; // the door faces +Z, toward the tree once rotated
+  // The door faces +Z, toward the tree once rotated; the A-frame gable is extruded 0.2 m shorter than d.
+  const depth = variant === "aframe" ? d - 0.2 : d;
+  const front = depth / 2;
   const chimneyTop = ridgeY + 0.55;
   const chimneyZ = variant === "aframe" ? 0 : -0.3;
 
-  const walls = useMerged(() => variant === "aframe"
+  // Walls, snow, wood and wreath in one vertex-coloured geometry: one draw call (and one shadow call) per chalet.
+  const wallParts = (): Part[] => variant === "aframe"
     ? [{ geometry: gable(w / 2 - 0.08, h - 0.1, d - 0.2, "z") }]
-    : [{ geometry: box(w, h, d, 0.06), position: [0, h / 2, 0] }, { geometry: gable(d / 2, ridgeY - h, w - 0.1, "x"), position: [0, h, 0] }], [variant]);
+    : [{ geometry: box(w, h, d, 0.06), position: [0, h / 2, 0] }, { geometry: gable(d / 2, ridgeY - h, w - 0.1, "x"), position: [0, h, 0] }];
 
-  const white = useMerged(() => {
+  const whiteParts = () => {
     const parts: Part[] = [];
     // Snow caps only: the roof planes themselves are wood, so the white reads as a layer on top.
     for (const side of [1, -1] as const) parts.push(slab(axis === "x" ? w + 0.4 : d + 2 * overhang + 0.1, halfRun + overhang + 0.05, ridgeY + 0.02, pitch, side, axis, 0.12, 0.2));
     parts.push({ geometry: box(0.55, 0.1, 0.55, 0.03), position: [chimneyX, chimneyTop + 0.05, chimneyZ] });
     parts.push({ geometry: new THREE.SphereGeometry(1, 14, 8), position: [0, 0, 0], scale: [w / 2 + 0.4, 0.25, d / 2 + 0.45] });
     return parts;
-  }, [variant, chimneyX]);
+  };
 
-  const wood = useMerged(() => {
+  const woodParts = () => {
     const parts: Part[] = [
       { geometry: box(0.45, chimneyTop - ridgeY + 1.2, 0.45, 0.03), position: [chimneyX, chimneyTop - (chimneyTop - ridgeY + 1.2) / 2, chimneyZ] },
       { geometry: box(1.0, 2.1, 0.07, 0.02), position: [0, 1.05, front - 0.01] },
       { geometry: box(0.86, 1.96, 0.1, 0.02), position: [0, 0.98, front + 0.02] },
     ];
     for (const side of [1, -1] as const) parts.push(slab(axis === "x" ? w + 0.3 : d + 2 * overhang, halfRun + overhang, ridgeY, pitch, side, axis, 0.12, 0.06));
-    for (const [x, y, z, ry, size] of windowSlots(variant, w, d)) parts.push({ geometry: box(size + 0.14, size + 0.14, 0.07, 0.02), position: [x, y, z], rotation: [0, ry, 0] });
+    for (const [x, y, z, ry, size] of windowSlots(variant, w, depth)) parts.push({ geometry: box(size + 0.14, size + 0.14, 0.07, 0.02), position: [x, y, z], rotation: [0, ry, 0] });
     if (variant === "storey") {
       // Balcony above the door, under the upper windows.
       parts.push({ geometry: box(1.6, 0.1, 0.5, 0.02), position: [0, 2.1, front + 0.25] });
@@ -77,9 +81,11 @@ export default function Chalet({ place, variant, facade, seed, rotation, shadows
       parts.push({ geometry: box(1.6, 0.06, 0.06, 0.01), position: [0, 2.75, front + 0.47] });
     }
     return parts;
-  }, [variant, chimneyX]);
+  };
+  const wreath = (): Part[] => [{ geometry: new THREE.TorusGeometry(0.2, 0.05, 6, 16), position: [0, 2.08, front + 0.1], rotation: [Math.PI / 2, 0, 0] }];
+  const body = useTintedMerge(() => [wallParts(), whiteParts(), woodParts(), wreath()], [variant, chimneyX], [facadeColor, colors["snow"], colors["wood"], colors["needle-dark"]]);
 
-  const panes = useMerged(() => windowSlots(variant, w, d).map(([x, y, z, ry, size]) => ({ geometry: new THREE.PlaneGeometry(size, size), position: [x + 0.045 * Math.sin(ry), y, z + 0.045 * Math.cos(ry)] as [number, number, number], rotation: [0, ry, 0] as [number, number, number] })), [variant]);
+  const panes = useMerged(() => windowSlots(variant, w, depth).map(([x, y, z, ry, size]) => ({ geometry: new THREE.PlaneGeometry(size, size), position: [x + 0.045 * Math.sin(ry), y, z + 0.045 * Math.cos(ry)] as [number, number, number], rotation: [0, ry, 0] as [number, number, number] })), [variant]);
 
   const label = useLabelTexture(place.name.replace(/^(Le |La |L')/u, ""));
   // The storey sign hangs on the balcony front; the A-frame sign hangs under the ridge overhang.
@@ -87,11 +93,8 @@ export default function Chalet({ place, variant, facade, seed, rotation, shadows
   const signZ = variant === "storey" ? front + 0.51 : variant === "aframe" ? front + 0.32 : front + 0.06;
 
   return <group position={[place.pos[0], 0, place.pos[2]]} rotation-y={rotation}>
-    <mesh geometry={walls} castShadow={shadows} receiveShadow><meshStandardMaterial color={facadeColor} roughness={0.85} /></mesh>
-    <mesh geometry={white} castShadow={shadows} receiveShadow><meshStandardMaterial color={colors["snow"] ?? new THREE.Color()} roughness={1} /></mesh>
-    <mesh geometry={wood} castShadow={shadows} receiveShadow><meshStandardMaterial color={colors["wood"] ?? new THREE.Color()} roughness={0.8} /></mesh>
+    <mesh geometry={body} castShadow={shadows} receiveShadow><meshStandardMaterial vertexColors roughness={0.9} /></mesh>
     <mesh geometry={panes}><meshBasicMaterial color={colors["lantern"] ?? new THREE.Color()} toneMapped={false} /></mesh>
-    <mesh position={[0, 2.08, front + 0.1]} rotation-x={Math.PI / 2}><torusGeometry args={[0.2, 0.05, 6, 16]} /><meshStandardMaterial color={colors["needle-dark"] ?? new THREE.Color()} roughness={0.9} /></mesh>
     <mesh position={[variant === "aframe" ? 0.55 : 0.75, 2.12, front + 0.1]}><boxGeometry args={[0.14, 0.18, 0.14]} /><meshBasicMaterial color={colors["lantern"] ?? new THREE.Color()} toneMapped={false} /></mesh>
     <mesh position={[0, signY, signZ]}><planeGeometry args={[0.9, 0.24]} /><meshBasicMaterial map={label ?? null} toneMapped={false} side={THREE.DoubleSide} /></mesh>
     <group position={[chimneyX - 0.55, chimneyTop - 2.55, chimneyZ + 0.3]}><ChimneySmoke /></group>

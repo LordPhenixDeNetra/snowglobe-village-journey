@@ -55,43 +55,67 @@ export function stridePhase(distance: number, strideM: number): number {
   return phase < 0 ? phase + 1 : phase;
 }
 
+export type Legs4 = [number, number, number, number];
+
+/* Every pose function takes an optional `out` filled in place: the animation loops pass their own buffers and
+ * allocate nothing per frame; without it a fresh result is returned. */
+
 /** Thigh swing angles [front-left, front-right, hind-left, hind-right]: diagonal pairs move together (trot). */
-export function quadrupedLegs(phase: number, amplitude: number): [number, number, number, number] {
+export function quadrupedLegs(phase: number, amplitude: number, out: Legs4 = [0, 0, 0, 0]): Legs4 {
   const swing = amplitude * Math.sin(phase * TAU);
-  return [swing, -swing, -swing, swing];
+  out[0] = swing; out[1] = -swing; out[2] = -swing; out[3] = swing;
+  return out;
+}
+
+/** Knee flexion matching `quadrupedLegs`: a leg bends (hoof lifted) only while its thigh swings forward, i.e. while
+ *  its angle decreases (positive angles point the hoof backward), and stays straight while it pushes back. */
+export function quadrupedKnees(phase: number, lift: number, out: Legs4 = [0, 0, 0, 0]): Legs4 {
+  const c = Math.cos(phase * TAU);
+  const first = lift * Math.max(0, -c), second = lift * Math.max(0, c);
+  out[0] = first; out[1] = second; out[2] = second; out[3] = first;
+  return out;
 }
 
 export type BipedStep = { thighL: number; kneeL: number; thighR: number; kneeR: number; drop: number };
 
 /** One leg over its own cycle u ∈ [0, 1): stance (straight, planted) for the first half, swing (knee bent) after.
  *  During stance sin(thigh) = (u − 0.25)·stride / leg, so the foot stays put while the hips advance stride/2. */
-function leg(u: number, stride: number, length: number): [number, number] {
-  const reach = Math.asin(Math.min(1, stride / (4 * length)));
-  if (u < 0.5) return [Math.asin(((u - 0.25) * stride) / length), 0];
-  const t = (u - 0.5) / 0.5;
-  // Bend the knee only while the thigh is still behind: bending it once the thigh points forward would
-  // lengthen the leg and drag the foot through the snow before it lands.
-  return [reach * Math.cos(Math.PI * t), t < 0.5 ? 0.9 * Math.sin(2 * Math.PI * t) : 0];
+function legThigh(u: number, stride: number, length: number): number {
+  if (u < 0.5) return Math.asin(((u - 0.25) * stride) / length);
+  return Math.asin(Math.min(1, stride / (4 * length))) * Math.cos(Math.PI * (u - 0.5) / 0.5);
 }
+// Bend the knee only while the thigh is still behind: bending it once the thigh points forward would
+// lengthen the leg and drag the foot through the snow before it lands.
+function legKnee(u: number): number {
+  const t = (u - 0.5) / 0.5;
+  return u >= 0.5 && t < 0.5 ? 0.9 * Math.sin(2 * Math.PI * t) : 0;
+}
+const frac = (v: number) => v - Math.floor(v);
 
 /** Walking legs for a stride (same units as the legs); `drop` lowers the hips so the stance sole stays on the ground.
  *  Positive thigh/knee angles swing the foot backward (rotation about +X for a rig facing +Z). */
-export function bipedStep(phase: number, stride: number, thigh: number, shin: number): BipedStep {
-  const length = thigh + shin, frac = (v: number) => v - Math.floor(v);
-  const [thighL, kneeL] = leg(frac(phase + 0.25), stride, length);
-  const [thighR, kneeR] = leg(frac(phase + 0.75), stride, length);
-  const reach = (a: number, k: number) => thigh * Math.cos(a) + shin * Math.cos(a + k);
-  return { thighL, kneeL, thighR, kneeR, drop: length - Math.max(reach(thighL, kneeL), reach(thighR, kneeR)) };
+export function bipedStep(phase: number, stride: number, thigh: number, shin: number, out: BipedStep = { thighL: 0, kneeL: 0, thighR: 0, kneeR: 0, drop: 0 }): BipedStep {
+  const length = thigh + shin, uL = frac(phase + 0.25), uR = frac(phase + 0.75);
+  out.thighL = legThigh(uL, stride, length); out.kneeL = legKnee(uL);
+  out.thighR = legThigh(uR, stride, length); out.kneeR = legKnee(uR);
+  const reachL = thigh * Math.cos(out.thighL) + shin * Math.cos(out.thighL + out.kneeL);
+  const reachR = thigh * Math.cos(out.thighR) + shin * Math.cos(out.thighR + out.kneeR);
+  out.drop = length - Math.max(reachL, reachR);
+  return out;
 }
 
+export type BipedLimbs = { legL: number; legR: number; armL: number; armR: number };
+
 /** Each arm swings against the leg on its own side. */
-export function bipedLimbs(phase: number, amplitude: number): { legL: number; legR: number; armL: number; armR: number } {
+export function bipedLimbs(phase: number, amplitude: number, out: BipedLimbs = { legL: 0, legR: 0, armL: 0, armR: 0 }): BipedLimbs {
   const swing = amplitude * Math.sin(phase * TAU);
-  return { legL: swing, legR: -swing, armL: -swing * 0.8, armR: swing * 0.8 };
+  out.legL = swing; out.legR = -swing; out.armL = -swing * 0.8; out.armR = swing * 0.8;
+  return out;
 }
 
 /** Skating glide: the body leans ±0.15 rad over the gliding leg while the other one pushes (push > 0: left leg). */
-export function skateLean(phase: number): { lean: number; push: number } {
+export function skateLean(phase: number, out: { lean: number; push: number } = { lean: 0, push: 0 }): { lean: number; push: number } {
   const s = Math.sin(phase * TAU);
-  return { lean: 0.15 * s, push: s };
+  out.lean = 0.15 * s; out.push = s;
+  return out;
 }
