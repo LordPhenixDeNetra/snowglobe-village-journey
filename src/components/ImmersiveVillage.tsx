@@ -4,15 +4,18 @@ import { XROrigin, XRDomOverlay, useXR, useXRStore, useXRHitTest, useXRControlle
 import * as THREE from "three";
 import { PLACES, type Place } from "@/lib/village-places";
 import { AR_ROTATION_STEP, controllerTurn, horizontalHit, scaleForAR, VR_WORLD_SCALE, walkingTarget, walkingVelocity, walkOnGround, safeLanding, viewpoint, type GroundPosition, type WalkVelocity } from "@/lib/xr-navigation";
-import { Button } from "@/components/ui/button";
 import { useImmersiveAudio } from "@/hooks/use-ar-audio";
-import { Volume2, VolumeX, RotateCcw } from "lucide-react";
-import WeatherControls, { type WeatherProps } from "./WeatherControls";
-import { nextAmbience, AMBIENCE_LABELS } from "@/lib/village-weather";
-import ActivityControls, { starNames, type ActivityProps } from "./ActivityControls";
+import type { WeatherProps } from "./WeatherControls";
+import { AMBIENCE_LABELS } from "@/lib/village-weather";
+import { starNames, type ActivityProps } from "./ActivityControls";
 import { nextStar, ORNAMENT_COLORS } from "@/lib/village-activities";
 import { useServerFn } from "@tanstack/react-start";
 import { writeSantaLetter } from "@/lib/santa-letter.functions";
+import WorldPanel, { pulse } from "./xr/WorldPanel";
+import VRPanel, { pressShared } from "./xr/VRPanel";
+import AROverlay from "./xr/AROverlay";
+import { arPanelRows } from "@/lib/xr-panel";
+import { useWeatherColors } from "./VillageWeather";
 
 export type ImmersiveProps = WeatherProps & {
   activities: ActivityProps;
@@ -24,12 +27,6 @@ export type ImmersiveProps = WeatherProps & {
   scale: number;
   onScale: (scale: number) => void;
 };
-
-function pulse(session: XRSession | undefined) {
-  const input = Array.from(session?.inputSources ?? []).find(source => source.gamepad?.hapticActuators?.length);
-  const actuator = input?.gamepad?.hapticActuators?.[0];
-  if (actuator) void actuator.pulse(0.25, 35).catch(() => {});
-}
 
 // Canvas-backed labels avoid a remote font request inside the headset.
 function WorldButton({ label, position, onClick, disabled = false }: {
@@ -150,18 +147,10 @@ function VRNavigation({ focus, note, step, count, onStep, ambience, onAmbience, 
   return <>
     <XROrigin ref={origin} position={[0, 0, 6]} scale={VR_WORLD_SCALE}>
       <group ref={heading}>
-        <WorldButton label={focus ? `${step + 1}/${count} · ${focus.name}\n${note ?? ""}` : "Village de Noël\nPromenade libre"} position={[0, 0.28, 0]} onClick={() => { if (focus) visit(focus); }} />
-        <WorldButton label="Précédent" position={[-0.35, 0, 0]} disabled={!count || step === 0} onClick={() => onStep(-1)} />
-        <WorldButton label="Suivant" position={[0.35, 0, 0]} disabled={!count || step === count - 1} onClick={() => onStep(1)} />
-        <WorldButton label={smooth ? "Rotation fluide" : "Rotation par à-coups"} position={[-0.35, -0.25, 0]} onClick={() => setSmooth(!smooth)} />
-        <WorldButton label="Point de vue suivant" position={[0.35, -0.25, 0]} onClick={() => { const next = (spot + 1) % PLACES.length; setSpot(next); const place = PLACES[next]; if (place) visit(place); }} />
-        <WorldButton label="Quitter la VR" position={[0, -0.5, 0]} onClick={() => { void session?.end(); }} />
-        <WorldButton label={audio.busy ? "Chargement des sons…" : audio.enabled ? "Couper le conteur" : "Écouter le conteur"} position={[-0.35, -0.75, 0]} onClick={() => { if (audio.enabled || audio.busy) audio.stop(); else void audio.start(); }} />
-        <WorldButton label={audio.speaking ? "Le conteur parle…" : "Répéter la voix"} position={[0.35, -0.75, 0]} disabled={!audio.enabled || !focus} onClick={audio.repeat} />
-        <WorldButton label={AMBIENCE_LABELS[ambience]} position={[-0.35, -1, 0]} onClick={() => onAmbience(nextAmbience(ambience))} />
-        <WorldButton label={`Neige · ${snow}%`} position={[0.35, -1, 0]} onClick={() => onSnow(snow >= 100 ? 0 : Math.min(100, snow + 25))} />
-        <WorldActivities activities={activities} position={[1.15, 0.4, 0]} />
-        {audio.error && <WorldButton label={audio.error} position={[0, -1.25, 0]} onClick={() => { void audio.start(); }} />}
+        <VRPanel focus={focus} note={note} step={step} count={count} onStep={onStep} onVisit={visit} smooth={smooth} onSmooth={setSmooth}
+          onViewpoint={() => { const next = (spot + 1) % PLACES.length; setSpot(next); const place = PLACES[next]; if (place) visit(place); }}
+          audio={audio} ambience={ambience} onAmbience={onAmbience} snow={snow} onSnow={onSnow} activities={activities} session={session} />
+        {activities.activity && <WorldActivities activities={activities} position={[1.3, 0.25, 0]} />}
       </group>
     </XROrigin>
     <group ref={soundModel}>{children(land)}</group>
@@ -177,11 +166,14 @@ function ARPlacement({ children, scale, onScale, focus, note, step, count, onSte
   const generation = useRef(0);
   const pendingPlace = useRef(false);
   const [rotation, setRotation] = useState(0);
+  const [more, setMore] = useState(false);
   const [tracking, setTracking] = useState(false);
   const model = useRef<THREE.Group>(null);
   const soundModel = useRef<THREE.Group>(null);
-  const [overlay, setOverlay] = useState<HTMLDivElement | null>(null);
-  const reticle = useRef<THREE.Mesh>(null);
+  const reticle = useRef<THREE.Group>(null);
+  const dot = useRef<THREE.Mesh>(null);
+  const colors = useWeatherColors();
+  const calm = useMemo(() => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches, []);
   const candidate = useRef(new THREE.Matrix4());
   const valid = useRef(false);
   const [found, setFound] = useState(false);
@@ -189,16 +181,10 @@ function ARPlacement({ children, scale, onScale, focus, note, step, count, onSte
   const placedRef = useRef(false);
   const audio = useImmersiveAudio(soundModel, placed && !tracking, focus, note, step, count);
   const world = useMemo(() => new THREE.Matrix4(), []);
-  const ring = useMemo(() => new THREE.RingGeometry(0.08, 0.1, 32).rotateX(-Math.PI / 2), []);
-  useEffect(() => () => ring.dispose(), [ring]);
+  const ring = useMemo(() => new THREE.RingGeometry(0.075, 0.1, 48).rotateX(-Math.PI / 2), []);
+  const centre = useMemo(() => new THREE.CircleGeometry(0.018, 24).rotateX(-Math.PI / 2), []);
+  useEffect(() => () => { ring.dispose(); centre.dispose(); }, [ring, centre]);
   useEffect(() => () => { generation.current++; anchor.current?.delete(); anchor.current = null; }, []);
-  useEffect(() => {
-    const element = overlay;
-    if (!element) return;
-    const block = (event: Event) => event.preventDefault();
-    element.addEventListener("beforexrselect", block);
-    return () => element.removeEventListener("beforexrselect", block);
-  }, [overlay]);
   useXRHitTest((results, getWorldMatrix) => {
     if (placedRef.current) return;
     const result = results[0];
@@ -237,7 +223,8 @@ function ARPlacement({ children, scale, onScale, focus, note, step, count, onSte
     setPlaced(false); setFound(false); setTracking(false);
     if (model.current) model.current.visible = false;
   }
-  useFrame((_, __, frame) => {
+  useFrame((state, __, frame) => {
+    if (dot.current && !calm) dot.current.scale.setScalar(1 + 0.3 * Math.sin(state.clock.elapsedTime * 4));
     const reference = xrStore.getState().originReferenceSpace;
     if (anchor.current && frame && reference && model.current) {
       const pose = frame.getPose(anchor.current.anchorSpace, reference);
@@ -257,44 +244,41 @@ function ARPlacement({ children, scale, onScale, focus, note, step, count, onSte
   }, [session]);
   return <>
     <XROrigin />
-    <mesh ref={reticle} geometry={ring} matrixAutoUpdate={false} visible={false} onClick={place}>
-      <meshBasicMaterial color="gold" side={THREE.DoubleSide} />
-    </mesh>
+    <group ref={reticle} matrixAutoUpdate={false} visible={false}>
+      <mesh geometry={ring} onClick={place}><meshBasicMaterial color={colors["gold"] ?? "white"} transparent opacity={0.65} side={THREE.DoubleSide} /></mesh>
+      <mesh ref={dot} geometry={centre}><meshBasicMaterial color={colors["gold"] ?? "white"} side={THREE.DoubleSide} /></mesh>
+    </group>
     <group ref={model} visible={false}><group ref={soundModel} scale={scaleForAR(scale)} rotation-y={rotation}>{children}</group></group>
     {!session?.domOverlayState && <group ref={fallback}>
-      {placed && <WorldActivities activities={activities} position={[1, 0.4, -1.2]} />}
-      <WorldButton label={placed ? "Repositionner" : found ? "Poser le village" : "Recherche de surface…"} position={[0, -0.25, -1.2]} disabled={!placed && !found} onClick={placed ? reposition : place} />
-      {placed && <>
-        <WorldButton label="− Taille" position={[-0.35, -0.5, -1.2]} onClick={() => onScale(scaleForAR(scale - 0.005))} />
-        <WorldButton label="+ Taille" position={[0.35, -0.5, -1.2]} onClick={() => onScale(scaleForAR(scale + 0.005))} />
-        <WorldButton label="Tourner" position={[0, -0.75, -1.2]} onClick={() => setRotation(value => value + AR_ROTATION_STEP)} />
-        {focus && <><WorldButton label="Précédent" position={[-0.35, 0, -1.2]} disabled={step === 0} onClick={() => onStep(-1)} /><WorldButton label="Suivant" position={[0.35, 0, -1.2]} disabled={step === count - 1} onClick={() => onStep(1)} /></>}
-      </>}
-      <WorldButton label="Quitter l’AR" position={[0, 0.25, -1.2]} onClick={() => { void session?.end(); }} />
-      {placed && <><WorldButton label={AMBIENCE_LABELS[ambience]} position={[-0.35, -1, -1.2]} onClick={() => onAmbience(nextAmbience(ambience))} /><WorldButton label={`Neige · ${snow}%`} position={[0.35, -1, -1.2]} onClick={() => onSnow(snow >= 100 ? 0 : Math.min(100, snow + 25))} /></>}
-      {placed && <><WorldButton label={audio.enabled || audio.busy ? "Couper le conteur" : "Écouter le conteur"} position={[0, 0.5, -1.2]} onClick={() => { if (audio.enabled || audio.busy) audio.stop(); else void audio.start(); }} />
-        {audio.enabled && focus && <WorldButton label="Répéter la voix" position={[0, 0.75, -1.2]} onClick={audio.repeat} />}
-        {audio.error && <WorldButton label={audio.error} position={[0, 1, -1.2]} onClick={() => { void audio.start(); }} />}</>}
+      {/* Below the line of sight (top edge 0.2 m under eye level at 1.2 m), so the miniature stays in view. */}
+      <WorldPanel position={[0, -0.2, -1.2]} scale={0.6} rows={arPanelRows({
+        placed, surface: found, focusName: focus?.name ?? null, step, count, more,
+        audio: { enabled: audio.enabled, busy: audio.busy, speaking: audio.speaking, error: audio.error },
+        ambienceLabel: AMBIENCE_LABELS[ambience], snow, found: activities.found.length, activity: activities.activity,
+      })} onPress={id => {
+        if (id === "place") place();
+        else if (id === "more") setMore(value => !value);
+        else if (id === "exit") void session?.end();
+        else if (id === "reposition") reposition();
+        else if (id === "prev") onStep(-1);
+        else if (id === "next") onStep(1);
+        else if (id === "smaller") onScale(scaleForAR(scale - 0.005));
+        else if (id === "bigger") onScale(scaleForAR(scale + 0.005));
+        else if (id === "rotate") setRotation(value => value + AR_ROTATION_STEP);
+        else pressShared(id, { activities, ambience, onAmbience, snow, onSnow, audio });
+      }} />
+      {placed && activities.activity && <WorldActivities activities={activities} position={[1.3, 0.35, -1.2]} />}
     </group>}
-    <XRDomOverlay className="pointer-events-none fixed inset-0 flex items-end justify-center p-4">
-      <div ref={setOverlay} className="pointer-events-auto max-h-[80dvh] w-full max-w-sm space-y-3 overflow-y-auto rounded-lg bg-card/95 p-4 text-card-foreground">
-        <p className="font-semibold">{tracking ? "Suivi interrompu…" : placed ? "Village de Noël · Maquette" : found ? "Surface détectée" : "Recherche d’une surface horizontale…"}</p>
-        {placed ? <>
-          <ActivityControls {...activities} />
-          <WeatherControls ambience={ambience} onAmbience={onAmbience} snow={snow} onSnow={onSnow} />
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="secondary" disabled={tracking} onClick={() => { if (audio.enabled || audio.busy) audio.stop(); else void audio.start(); }}><span className="flex items-center gap-2">{audio.enabled ? <VolumeX /> : <Volume2 />}{audio.busy ? "Chargement des sons…" : audio.enabled ? "Couper le conteur" : "Écouter le conteur"}</span></Button>
-            <Button variant="outline" size="icon" disabled={!audio.enabled || !focus} onClick={audio.repeat} aria-label="Répéter la narration" title="Répéter la narration"><RotateCcw /></Button>
-            {audio.speaking && <span className="text-xs text-muted-foreground" aria-live="polite">Le conteur parle…</span>}
-          </div>
-          {audio.error && <p role="alert" className="text-sm text-destructive">{audio.error}</p>}
-          <label className="block text-sm">Taille de la maquette<input aria-label="Taille de la maquette" type="range" min="0.015" max="0.05" step="0.001" value={scale} onChange={e => onScale(Number(e.target.value))} className="mt-2 w-full accent-primary" /></label>
-          <label className="block text-sm">Orientation<input aria-label="Orientation de la maquette" type="range" min="0" max="360" step="5" value={(rotation * 180 / Math.PI) % 360} onChange={e => setRotation(Number(e.target.value) * Math.PI / 180)} className="mt-2 w-full accent-primary" /></label>
-          {focus && <><p className="text-sm">{step + 1}/{count} · {focus.name}</p><div className="flex gap-2"><Button disabled={step === 0} onClick={() => onStep(-1)}>Précédent</Button><Button disabled={step === count - 1} onClick={() => onStep(1)}>Suivant</Button></div></>}
-          <Button variant="secondary" onClick={reposition}>Repositionner</Button>
-        </> : <Button disabled={!found} onClick={place}>Poser le village</Button>}
-        <Button variant="outline" className="ml-2" onClick={() => { void session?.end(); }}>Quitter l’AR</Button>
-      </div>
+    <XRDomOverlay className="pointer-events-none fixed inset-0">
+      <AROverlay state={{
+        placed, found, tracking, focusName: focus?.name ?? null, note, step, count,
+        audio: { enabled: audio.enabled, busy: audio.busy, speaking: audio.speaking, error: audio.error },
+        scale, rotationDeg: (rotation * 180 / Math.PI) % 360, ambience, snow, activities,
+      }} actions={{
+        place, reposition, exit: () => { void session?.end(); }, onStep,
+        startAudio: () => { void audio.start(); }, stopAudio: audio.stop, repeat: audio.repeat,
+        onScale, onRotation: degrees => setRotation(degrees * Math.PI / 180), onAmbience, onSnow,
+      }} />
     </XRDomOverlay>
   </>;
 }
@@ -303,16 +287,14 @@ function WorldActivities({ activities, position }: { activities: ActivityProps; 
   const [color, setColor] = useState(0);
   const currentColor = ORNAMENT_COLORS[color] ?? "red";
   return <group position={position}>
-    <WorldButton label="Poste du Père Noël" position={[0, 0, 0]} onClick={() => activities.onActivity(activities.activity === "letter" ? null : "letter")} />
-    <WorldButton label={`Cadeaux · ${activities.found.length}/5`} position={[0, -0.25, 0]} onClick={() => { activities.onActivity("hunt"); if (!activities.hunting) activities.onHunt(); }} />
-    <WorldButton label="Décorer le sapin" position={[0, -0.5, 0]} onClick={() => activities.onActivity(activities.activity === "tree" ? null : "tree")} />
-    {activities.activity === "hunt" && <WorldButton label="Recommencer la chasse" position={[0, -0.75, 0]} onClick={activities.onHunt} />}
+    {/* The activity choice itself lives in the panel row (Poste, Cadeaux, Sapin); only its tools show here. */}
+    {activities.activity === "hunt" && <WorldButton label="Recommencer la chasse" position={[0, 0, 0]} onClick={activities.onHunt} />}
     {activities.activity === "tree" && <>
-      <WorldButton label={`Couleur · ${{ red: "Rouge", blue: "Bleu", gold: "Or", green: "Vert" }[currentColor]}`} position={[0, -0.75, 0]} onClick={() => setColor(value => (value + 1) % 4)} />
-      <WorldButton label={`+ Boule · ${activities.decoration.ornaments.length}/60`} position={[0, -1, 0]} onClick={() => activities.onOrnament(currentColor)} disabled={activities.decoration.ornaments.length >= 60} />
-      <WorldButton label={`+ Guirlande · ${activities.decoration.garlands}/3`} position={[0, -1.25, 0]} onClick={activities.onGarland} disabled={activities.decoration.garlands >= 3} />
-      <WorldButton label={`Étoile · ${starNames[activities.decoration.star]}`} position={[0, -1.5, 0]} onClick={() => activities.onStar(nextStar(activities.decoration.star))} />
-      <WorldButton label="Réinitialiser le sapin" position={[0, -1.75, 0]} onClick={activities.onResetTree} />
+      <WorldButton label={`Couleur · ${{ red: "Rouge", blue: "Bleu", gold: "Or", green: "Vert" }[currentColor]}`} position={[0, 0, 0]} onClick={() => setColor(value => (value + 1) % 4)} />
+      <WorldButton label={`+ Boule · ${activities.decoration.ornaments.length}/60`} position={[0, -0.25, 0]} onClick={() => activities.onOrnament(currentColor)} disabled={activities.decoration.ornaments.length >= 60} />
+      <WorldButton label={`+ Guirlande · ${activities.decoration.garlands}/3`} position={[0, -0.5, 0]} onClick={activities.onGarland} disabled={activities.decoration.garlands >= 3} />
+      <WorldButton label={`Étoile · ${starNames[activities.decoration.star]}`} position={[0, -0.75, 0]} onClick={() => activities.onStar(nextStar(activities.decoration.star))} />
+      <WorldButton label="Réinitialiser le sapin" position={[0, -1, 0]} onClick={activities.onResetTree} />
     </>}
     {activities.activity === "letter" && <WorldLetter />}
   </group>;
@@ -335,6 +317,7 @@ function WorldLetter() {
     const words = (reply || letter || "Cher Père Noël…").split(/\s+/); const lines: string[] = []; let line = "";
     for (const word of words) { if (ctx.measureText(`${line} ${word}`).width > 900) { lines.push(line); line = word; } else line += `${line ? " " : ""}${word}`; } if (line) lines.push(line);
     lines.slice(page * 16, (page + 1) * 16).forEach((text, i) => ctx.fillText(text, 60, 90 + i * 55));
+    ctx.font = "28px sans-serif"; ctx.fillText("Réponse imaginaire générée par IA · Ne partagez pas d’adresse.", 60, 990, 900);
     const next = new THREE.CanvasTexture(canvas); next.colorSpace = THREE.SRGBColorSpace; setTexture(next); return () => next.dispose();
   }, [letter, reply, page]);
   async function submit() {
@@ -343,7 +326,7 @@ function WorldLetter() {
     catch { setReply("La Poste est momentanément indisponible. Votre lettre est conservée."); }
     finally { setBusy(false); }
   }
-  return <group position={[0.85, -0.4, 0]}>
+  return <group position={[0.2, 0.1, 0]}>
     <mesh position={[0, -0.35, 0]}><planeGeometry args={[0.95, 0.95]} /><meshBasicMaterial map={texture ?? null} toneMapped={false} /></mesh>
     <WorldButton label={busy ? "Réponse en préparation…" : "Envoyer ma lettre"} position={[0, -0.95, 0]} disabled={busy || !letter.trim()} onClick={() => { void submit(); }} />
     <WorldButton label="Écrire / modifier" position={[0, -1.2, 0]} onClick={() => { setReply(""); setPage(0); setKeyboard(!keyboard); }} />
