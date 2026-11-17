@@ -48,6 +48,7 @@ Open the published HTTPS app directly in a WebXR-compatible headset browser. Cre
 5. Open **Plus…**, check the extra rows appear below without covering the first two, select **Quitter la VR** and confirm the desktop village returns. Re-enter VR: **Plus…** must be folded again.
 6. With a tour active, press the right controller's A/B buttons for next/previous stops where those buttons exist. Controller rays and triggers select the panel buttons; aiming at one must outline it in gold before the trigger. Optional vibration confirms every panel action and teleportation.
 7. Disconnect the left controller: the right thumbstick must still rotate. Reconnect the left controller and verify walking resumes.
+8. Without a tour, the centre button of the first row reads **Promenade libre** and is shown disabled (dimmed, no action), like **Précédent** and **Suivant**; **Point de vue suivant** and the tour stop give a single haptic pulse, not two.
 
 ### Ground walking in VR
 The village uses one world unit per metre; the floor-relative headset pose supplies the visitor's real eye height, without a forced camera offset or head bob.
@@ -67,6 +68,7 @@ Open the published HTTPS app directly in a browser with immersive WebXR AR and h
 3. Open **Maquette** in the bottom bar, adjust **Taille** and **Orientation**, select **Repositionner**, and place it elsewhere.
 4. A pre-created tour shows its stop, note and Previous/Next under **Parcours**; **Activités**, **Ambiance** and **Conteur** open one panel at a time above the bar, and tapping the active entry again closes it.
 5. Select **Quitter l’AR** (top right, always visible) or use the browser's session exit.
+6. Before placement, tap the status pill at the top: it must not place the village (the tap stays in the overlay). On a phone held in landscape, the bar, the open panel and **Quitter l’AR** stay clear of the notch and rounded corners.
 
 AR placement requests a session anchor when supported and falls back to a fixed XR world position otherwise; it is not a persistent cross-session save. Anchored models hide while their pose is unavailable and return when tracking recovers. Devices without DOM overlays receive one world-space glass panel with placement, tour, storyteller, resizing, rotation, ambience, activities, reposition and exit. Check that overlay taps never also place the village. Snow, lights and the tour sleigh continue animating after placement; activate music before entering immersion if desired.
 

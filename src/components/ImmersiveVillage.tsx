@@ -244,10 +244,11 @@ function ARPlacement({ children, scale, onScale, focus, note, step, count, onSte
   }, [session]);
   return <>
     <XROrigin />
-    <group ref={reticle} matrixAutoUpdate={false} visible={false}>
-      <mesh geometry={ring} onClick={place}><meshBasicMaterial color={colors["gold"] ?? "white"} transparent opacity={0.65} side={THREE.DoubleSide} /></mesh>
-      <mesh ref={dot} geometry={centre}><meshBasicMaterial color={colors["gold"] ?? "white"} side={THREE.DoubleSide} /></mesh>
-    </group>
+    {/* Only once the gold token is read: no hard-coded fallback colour. */}
+    {colors["gold"] && <group ref={reticle} matrixAutoUpdate={false} visible={false}>
+      <mesh geometry={ring} onClick={place}><meshBasicMaterial color={colors["gold"]} transparent opacity={0.65} side={THREE.DoubleSide} /></mesh>
+      <mesh ref={dot} geometry={centre}><meshBasicMaterial color={colors["gold"]} side={THREE.DoubleSide} /></mesh>
+    </group>}
     <group ref={model} visible={false}><group ref={soundModel} scale={scaleForAR(scale)} rotation-y={rotation}>{children}</group></group>
     {!session?.domOverlayState && <group ref={fallback}>
       {/* Below the line of sight (top edge 0.2 m under eye level at 1.2 m), so the miniature stays in view. */}

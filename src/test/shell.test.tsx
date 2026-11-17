@@ -95,7 +95,10 @@ describe("panneau parcours et puce", () => {
   it("la puce montre l'étape, navigue et ouvre le panneau", () => {
     const onStep = vi.fn(), onOpen = vi.fn();
     render(<TourChip step={1} count={4} name="La Chocolaterie" onStep={onStep} onOpen={onOpen} />);
-    fireEvent.click(screen.getByRole("button", { name: "2/4 · La Chocolaterie" }));
+    const stop = screen.getByRole("button", { name: "2/4 · La Chocolaterie" });
+    expect(stop).toHaveAttribute("title", "2/4 · La Chocolaterie");
+    expect(stop.querySelector(".truncate")).toHaveTextContent("2/4 · La Chocolaterie");
+    fireEvent.click(stop);
     expect(onOpen).toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Étape précédente" }));
     expect(onStep).toHaveBeenCalledWith(-1);

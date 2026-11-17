@@ -42,6 +42,14 @@ describe("overlay AR", () => {
     render(<AROverlay state={{ ...arState, placed: true, tracking: true }} actions={arActions} />);
     expect(screen.getByRole("status")).toHaveTextContent("Suivi interrompu…");
   });
+  it("un tap sur la pastille d'état reste dans l'overlay et ne pose pas le village", () => {
+    render(<AROverlay state={{ ...arState, placed: false, found: true }} actions={arActions} />);
+    const pill = screen.getByRole("status"), root = screen.getByTestId("ar-overlay");
+    expect(pill).toHaveClass("pointer-events-auto");
+    expect(root.contains(pill)).toBe(true);
+    const event = new Event("beforexrselect", { bubbles: true, cancelable: true }); pill.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+  });
   it("ActionBar sans items garde les cinq entrées desktop", () => {
     const panels = { tour: <p>P</p>, activities: <p>A</p>, ambience: <p>M</p>, music: <p>Mu</p>, immersion: <p>I</p> };
     render(<ActionBar open={null} onOpen={vi.fn()} hunting={false} found={0} panels={panels} />);
