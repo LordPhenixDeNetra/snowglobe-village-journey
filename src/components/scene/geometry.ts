@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
@@ -84,7 +84,8 @@ export function useTintedMerge(
   }, deps);
   useEffect(() => () => geometry.dispose(), [geometry]);
   const key = colors.map((color) => color?.getHexString() ?? "").join();
-  useEffect(() => {
+  // Layout effect: the colours are in the buffer before the first frame is drawn.
+  useLayoutEffect(() => {
     const attribute = geometry.getAttribute("color") as THREE.BufferAttribute;
     starts.forEach((start, i) => {
       const color = colors[i];

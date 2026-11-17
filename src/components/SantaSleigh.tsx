@@ -21,6 +21,11 @@ declare global {
   }
 }
 
+/** Forget a failed load so the next mount fetches the model again. */
+export function forgetSleighModel() {
+  useGLTF.clear(sleighAsset.url);
+}
+
 export default function SantaSleigh({ stopId }: { stopId: string | undefined }) {
   const { scene } = useGLTF(sleighAsset.url);
   const group = useRef<THREE.Group>(null);

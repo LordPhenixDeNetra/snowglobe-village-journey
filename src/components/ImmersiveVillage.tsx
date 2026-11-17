@@ -162,9 +162,11 @@ function VRNavigation({
   }
 
   function land(point: GroundPosition) {
-    if (!origin.current || !safeLanding(point[0], point[2])) return;
-    velocity.current = { x: 0, z: 0 };
+    if (!origin.current) return;
+    // Pulse even when the destination is refused, so a press on the panel never goes unanswered.
     pulse(session);
+    if (!safeLanding(point[0], point[2])) return;
+    velocity.current = { x: 0, z: 0 };
     const head = camera.getWorldPosition(new THREE.Vector3());
     const feet = origin.current.getWorldPosition(new THREE.Vector3());
     origin.current.position.x += point[0] - head.x;
