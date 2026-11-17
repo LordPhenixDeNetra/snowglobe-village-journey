@@ -3,7 +3,7 @@ import { PLACES } from "@/lib/village-places";
 import { GIFTS } from "@/lib/village-activities";
 import { sleighDestination } from "@/lib/sleigh-motion";
 import { viewpoint } from "@/lib/xr-navigation";
-import { CHALETS, LAMP_POSTS, OBSTACLES, LAKE, PADDOCK, TREE_TIERS, treeRadiusAt, insideLake, forestPlacements, forestMatrices, garlandSpans, lampPoolOpacity, pathLayout, seeded } from "@/lib/village-props";
+import { CHALETS, LAMP_POSTS, OBSTACLES, LAKE, PADDOCK, TREE_TIERS, treeRadiusAt, insideLake, forestPlacements, forestMatrices, garlandSpans, lampPoolOpacity, pathLayout, seeded, REINDEER, PADDOCK_FENCE, ELVES, SANTA, SKATERS, routeLength, sampleRoute, type Route } from "@/lib/village-props";
 import { GIFTS as HUNT, ornamentPosition } from "@/lib/village-activities";
 import { SLEIGH_HOME, sleighPosition, type SleighPosition } from "@/lib/sleigh-motion";
 import * as THREE from "three";
@@ -105,5 +105,32 @@ describe("village props", () => {
     expect(lampPoolOpacity("day")).toBe(0);
     expect(lampPoolOpacity("night")).toBe(0.9);
     expect(seeded(7)()).toBe(seeded(7)());
+  });
+  it("les rennes restent dans l'enclos, loin de la clôture", () => {
+    for (const r of REINDEER) for (const p of r.route ? sampleRoute(r.route) : [r.at]) expect(d(p, PADDOCK.center)).toBeLessThanOrEqual(PADDOCK.r - 0.6);
+    expect(PADDOCK_FENCE.length).toBe(12);
+    expect(Math.hypot(...PADDOCK.center) + PADDOCK.r).toBeLessThan(21); // AR : rayon 23
+  });
+  it("lutins et Père Noël ne traversent ni chalet, ni lampadaire, ni sapin, et laissent libres points de vue, parking du traîneau et cadeaux", () => {
+    const spots = [...ELVES.flatMap(e => e.route ? sampleRoute(e.route) : [e.at]), SANTA.at];
+    for (const p of spots) {
+      expect(Math.hypot(...p)).toBeGreaterThan(3.3);                       // sapin (rayon 2,6 au pied)
+      for (const c of CHALETS) { const place = PLACES.find(x => x.id === c.id)!; expect(d(p, [place.pos[0], place.pos[2]])).toBeGreaterThan(1.9); }
+      for (const post of LAMP_POSTS) expect(d(p, post)).toBeGreaterThan(0.7);
+      for (const place of PLACES) { const [vx, , vz] = viewpoint(place); expect(d(p, [vx, vz])).toBeGreaterThan(0.8); const s = sleighDestination(place.id)!; expect(d(p, [s[0], s[2]])).toBeGreaterThan(1.6); }
+      for (const g of GIFTS) expect(d(p, [g.pos[0], g.pos[2]])).toBeGreaterThan(1);
+      expect(insideLake(p[0], p[1], 0.3)).toBe(false);
+      expect(d(p, [SLEIGH_HOME[0], SLEIGH_HOME[2]])).toBeGreaterThan(1.8);    // traîneau garé hors visite
+      for (const place of PLACES.filter(x => x.id.startsWith("bonhomme"))) expect(d(p, [place.pos[0], place.pos[2]])).toBeGreaterThan(1.1);
+    }
+  });
+  it("les patineurs restent sur la glace", () => {
+    expect(SKATERS).toHaveLength(2);
+    for (const s of SKATERS) for (const p of sampleRoute(s.route)) expect(insideLake(p[0], p[1], -0.3)).toBe(true);
+  });
+  it("routeLength et sampleRoute sont cohérents", () => {
+    const square: Route = { points: [[0, 0], [1, 0], [1, 1], [0, 1]], loop: true };
+    expect(routeLength(square)).toBeCloseTo(4); expect(routeLength({ ...square, loop: false })).toBeCloseTo(3);
+    expect(sampleRoute(square, 0.5)).toHaveLength(8);
   });
 });
