@@ -10,7 +10,12 @@ import { MusicAudio, MusicControls, useChristmasMusic } from "./ChristmasMusic";
 import SantaSleigh from "./SantaSleigh";
 import ImmersiveVillage from "./ImmersiveVillage";
 import { AR_DEFAULT_SCALE, scaleForAR, safeLanding, type GroundPosition } from "@/lib/xr-navigation";
-import { ChimneySmoke, WeatherLighting } from "./VillageWeather";
+import { WeatherLighting } from "./VillageWeather";
+import { CHALETS } from "@/lib/village-props";
+import Chalet from "./scene/Chalet";
+import { BigTree, Forest, Ground, Lake, Snowman } from "./scene/nature";
+import { Garlands, LampPosts } from "./scene/lights";
+import StatsProbe from "./scene/StatsProbe";
 import WeatherControls from "./WeatherControls";
 import { snowfall, type Ambience } from "@/lib/village-weather";
 import ActivityControls, { type Activity, type ActivityProps } from "./ActivityControls";
@@ -18,7 +23,7 @@ import WelcomeScreen from "./shell/WelcomeScreen";
 import ActionBar, { type PanelId } from "./shell/ActionBar";
 import TourChip from "./shell/TourChip";
 import { ImmersionPanel, TourPanel } from "./shell/panels";
-import VillageActivities, { TreeDecorations } from "./VillageActivities";
+import VillageActivities from "./VillageActivities";
 import { addGarland, addOrnament, collectGift, GIFTS, INITIAL_DECORATION, type Decoration } from "@/lib/village-activities";
 
 function CameraRig({ focus }: { focus: Place | null }) {
@@ -44,7 +49,7 @@ function CameraRig({ focus }: { focus: Place | null }) {
 }
 
 declare global {
-  interface Window { __villageActivities?: { viewGift: (index: number) => void; overview: () => void }; }
+  interface Window { __villageActivities?: { viewGift: (index: number) => void; overview: () => void; viewPlace: (id: string) => void; look: (from: [number, number, number], to: [number, number, number]) => void }; }
 }
 function ActivityProbe({ mode }: { mode: string }) {
   const { camera, controls } = useThree();
@@ -54,9 +59,18 @@ function ActivityProbe({ mode }: { mode: string }) {
     window.__villageActivities = {
       viewGift: index => {
         const gift = GIFTS[index]; if (!gift || !c) return;
-        const [x, , z] = gift.pos; camera.position.set(x + 3, 2.5, z + 3); c.target.set(x, 0.4, z); c.update();
+        // Gifts hide behind chalets: look from the side, at child height, never from the village centre.
+        const [x, , z] = gift.pos; const length = Math.hypot(x, z) || 1; const ux = x / length, uz = z / length;
+        camera.position.set(x - uz * 3 + ux * 0.5, 1.4, z + ux * 3 + uz * 0.5); c.target.set(x, 0.4, z); c.update();
       },
       overview: () => { camera.position.set(0, 14, 23); c?.target.set(0, 5, 0); c?.update(); },
+      // Camera 3.5 m in front of a place (toward the tree), for render checks of the chalets.
+      viewPlace: id => {
+        const place = PLACES.find(p => p.id === id); if (!place || !c) return;
+        const [x, , z] = place.pos; const length = Math.hypot(x, z) || 1;
+        camera.position.set(x - (x / length) * 3.5, 2.2, z - (z / length) * 3.5); c.target.set(x, 1, z); c.update();
+      },
+      look: (from, to) => { camera.position.set(...from); c?.target.set(...to); c?.update(); },
     };
     return () => { delete window.__villageActivities; };
   }, [camera, controls, mode]);
@@ -89,87 +103,6 @@ const store = createXRStore({
 function rand(seed: number) {
   let s = seed;
   return () => ((s = (s * 16807) % 2147483647) / 2147483647);
-}
-
-function House({ position, color, rot }: { position: [number, number, number]; color: string; rot: number }) {
-  return (
-    <group position={position} rotation-y={rot}>
-      <mesh position={[0, 0.75, 0]} castShadow receiveShadow>
-        <boxGeometry args={[2, 1.5, 1.6]} />
-        <meshStandardMaterial color={color} roughness={0.8} />
-      </mesh>
-      <mesh position={[0, 1.95, 0]} rotation-y={Math.PI / 4} castShadow>
-        <coneGeometry args={[1.65, 1, 4]} />
-        <meshStandardMaterial color="#f4f7fb" roughness={0.9} />
-      </mesh>
-      <mesh position={[0, 0.45, 0.81]}>
-        <boxGeometry args={[0.45, 0.9, 0.05]} />
-        <meshStandardMaterial color="#5a3420" />
-      </mesh>
-      {[-0.6, 0.6].map((x) => (
-        <mesh key={x} position={[x, 0.95, 0.81]}>
-          <boxGeometry args={[0.4, 0.4, 0.05]} />
-          <meshStandardMaterial color="#ffd27a" emissive="#ffb84d" emissiveIntensity={1.5} />
-        </mesh>
-      ))}
-      <mesh position={[0.55, 2.2, -0.3]} castShadow>
-        <boxGeometry args={[0.3, 0.7, 0.3]} />
-        <meshStandardMaterial color="#8a3b2e" />
-      </mesh>
-      <ChimneySmoke />
-    </group>
-  );
-}
-
-function Tree({ position, scale = 1 }: { position: [number, number, number]; scale?: number }) {
-  return (
-    <group position={position} scale={scale}>
-      <mesh position={[0, 0.3, 0]} castShadow>
-        <cylinderGeometry args={[0.12, 0.15, 0.6]} />
-        <meshStandardMaterial color="#5b3a22" />
-      </mesh>
-      {[0, 1, 2].map((i) => (
-        <mesh key={i} position={[0, 0.9 + i * 0.55, 0]} castShadow>
-          <coneGeometry args={[0.9 - i * 0.25, 0.9, 8]} />
-          <meshStandardMaterial color={i % 2 ? "#1f5e3a" : "#24704a"} roughness={0.9} />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
-function BigTree({ activities }: { activities: ActivityProps }) {
-  const lights = useMemo(() => {
-    const r = rand(7);
-    return Array.from({ length: 60 }, (_, i) => {
-      const h = r() * 4.2;
-      const rad = (1 - h / 4.8) * 1.9;
-      const a = r() * Math.PI * 2;
-      return { p: [Math.cos(a) * rad, 1 + h, Math.sin(a) * rad] as [number, number, number], c: ["#ff4040", "#ffd700", "#40a0ff", "#ffffff"][i % 4] ?? "#ffffff" };
-    });
-  }, []);
-  const group = useRef<THREE.Group>(null);
-  useFrame(({ clock }) => {
-    group.current?.children.forEach((m, i) => {
-      const mat = (m as THREE.Mesh).material as THREE.MeshStandardMaterial;
-      mat.emissiveIntensity = 1.5 + Math.sin(clock.elapsedTime * 3 + i) * 1.2;
-    });
-  });
-  return (
-    <group onClick={event => { event.stopPropagation(); activities.onActivity("tree"); }}>
-      <Tree position={[0, 0, 0]} scale={2.6} />
-      <group ref={group}>
-        {lights.map((l, i) => (
-          <mesh key={i} position={l.p}>
-            <sphereGeometry args={[0.07, 8, 8]} />
-            <meshStandardMaterial color={l.c} emissive={l.c} />
-          </mesh>
-        ))}
-      </group>
-      <TreeDecorations decoration={activities.decoration} />
-      <pointLight position={[0, 4, 0]} intensity={8} distance={10} color="#ffcf80" />
-    </group>
-  );
 }
 
 function Snow({ intensity }: { intensity: number }) {
@@ -209,27 +142,6 @@ function Snow({ intensity }: { intensity: number }) {
   );
 }
 
-function Snowman({ position }: { position: [number, number, number] }) {
-  return (
-    <group position={position}>
-      {([[0.5, 0.45], [0.35, 1.15], [0.25, 1.65]] as [number, number][]).map(([r, y], i) => (
-        <mesh key={i} position={[0, y, 0]} castShadow>
-          <sphereGeometry args={[r, 16, 16]} />
-          <meshStandardMaterial color="#fafcff" />
-        </mesh>
-      ))}
-      <mesh position={[0, 1.65, 0.27]} rotation-x={Math.PI / 2}>
-        <coneGeometry args={[0.05, 0.3, 8]} />
-        <meshStandardMaterial color="#ff7a1a" />
-      </mesh>
-      <mesh position={[0, 1.95, 0]}>
-        <cylinderGeometry args={[0.18, 0.18, 0.3]} />
-        <meshStandardMaterial color="#1a1a1a" />
-      </mesh>
-    </group>
-  );
-}
-
 function useReducedMotion() {
   const [reduced, setReduced] = useState(false);
   useEffect(() => {
@@ -243,30 +155,17 @@ function useReducedMotion() {
 }
 
 function Scene({ focus, mode, teleport, ambience, snow, activities, onCollect, idle }: { focus: Place | null; mode: "desktop" | "vr" | "ar"; teleport?: ((point: GroundPosition) => void) | undefined; ambience: Ambience; snow: number; activities: ActivityProps; onCollect: (id: string) => void; idle: boolean }) {
-  const houses = useMemo(() => {
-    const colors = ["#b23a3a", "#2f6b4f", "#c98b3a", "#3b5a8a", "#8a4a6b", "#a85a32"];
-    return Array.from({ length: 8 }, (_, i) => {
-      const a = (i / 8) * Math.PI * 2;
-      return { p: [Math.cos(a) * 9, 0, Math.sin(a) * 9] as [number, number, number], rot: -a - Math.PI / 2, c: colors[i % colors.length] ?? colors[0] ?? "#b23a3a" };
-    });
-  }, []);
-  const trees = useMemo(() => {
-    const r = rand(11);
-    return Array.from({ length: 40 }, () => {
-      const a = r() * Math.PI * 2, d = 13 + r() * 8;
-      return { p: [Math.cos(a) * d, 0, Math.sin(a) * d] as [number, number, number], s: 0.8 + r() * 0.9 };
-    });
-  }, []);
+  const shadows = mode === "desktop";
   return (
     <>
       <WeatherLighting ambience={ambience} ar={mode === "ar"} />
       <Environment>
         <Lightformer intensity={1} position={[0, 5, 0]} scale={[10, 10, 1]} color="#aac" />
       </Environment>
-      <mesh rotation-x={-Math.PI / 2} receiveShadow>
-        <circleGeometry args={[mode === "ar" ? 23 : 40, 64]} />
-        <meshStandardMaterial color="#e8eef7" roughness={1} />
-      </mesh>
+      <Ground radius={mode === "ar" ? 23 : 40} shadows={shadows} sparkles={mode !== "ar"} />
+      <Lake shadows={shadows} />
+      <LampPosts ambience={ambience} desktop={mode === "desktop"} />
+      <Garlands />
       {mode === "vr" && <TeleportTarget onTeleport={(_, event) => {
         const point = event.point;
         if (safeLanding(point.x, point.z)) teleport?.([point.x, 0, point.z]);
@@ -274,20 +173,19 @@ function Scene({ focus, mode, teleport, ambience, snow, activities, onCollect, i
         <ringGeometry args={[2.8, 12, 64]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh></TeleportTarget>}
-      <BigTree activities={activities} />
+      <BigTree activities={activities} shadows={shadows} />
       <VillageActivities props={activities} onCollect={onCollect} />
-      <Tree position={[-11.3, 0, -3]} scale={1.4} />
-      <Tree position={[2.5, 0, -11.3]} scale={1.4} />
-      {houses.map((h, i) => <House key={i} position={h.p} rot={h.rot} color={h.c} />)}
-      {trees.map((t, i) => <Tree key={i} position={t.p} scale={t.s} />)}
-      <Snowman position={[4, 0, 3]} />
-      <Snowman position={[-4.5, 0, -2.5]} />
+      <Forest shadows={shadows} />
+      {CHALETS.map(c => { const place = PLACES.find(p => p.id === c.id); return place && <Chalet key={c.id} place={place} variant={c.variant} facade={c.facade} seed={c.seed} rotation={-Math.atan2(place.pos[2], place.pos[0]) - Math.PI / 2} shadows={shadows} />; })}
+      <Snowman position={[4, 0, 3]} seed={1} shadows={shadows} />
+      <Snowman position={[-4.5, 0, -2.5]} seed={2} shadows={shadows} />
       <Snow intensity={snow} />
       <Suspense fallback={null}><SantaSleigh stopId={focus?.id} /></Suspense>
       {focus && <Marker place={focus} />}
       {mode === "desktop" && <><CameraRig focus={focus} />
       <OrbitControls makeDefault target={[0, 2, 0]} maxPolarAngle={Math.PI / 2.1} minDistance={4} maxDistance={30} autoRotate={idle} autoRotateSpeed={0.4} /></>}
       <ActivityProbe mode={mode} />
+      <StatsProbe />
     </>
   );
 }

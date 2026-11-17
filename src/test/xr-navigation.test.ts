@@ -1,8 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { PLACES } from "@/lib/village-places";
 import { safeLanding, viewpoint, scaleForAR, walkingTarget, walkingVelocity, walkOnGround, WALK_SPEED, VR_WORLD_SCALE, controllerTurn, horizontalHit } from "@/lib/xr-navigation";
+import { LAMP_POSTS } from "@/lib/village-props";
 
 describe("immersive navigation", () => {
+  it("refuse les lampadaires et arrête la marche devant", () => {
+    const [x, z] = LAMP_POSTS[0]!;
+    expect(safeLanding(x, z)).toBe(false);
+    expect(safeLanding(x + 0.3, z)).toBe(false);
+    expect(safeLanding(x + 0.6, z)).toBe(true);
+    // One step short of the post: the next 6 cm would enter its radius, so the walker stays put.
+    const start: [number, number, number] = [x + 0.38, 0, z];
+    expect(walkOnGround(start, { x: -1.2, z: 0 }, 0.05)).toEqual(start);
+  });
   it("turns with the right controller alone and rearms a 30-degree snap on release", () => {
     expect(controllerTurn(1, false, true, 0.016).angle).toBeCloseTo(-Math.PI / 6);
     expect(controllerTurn(1, false, false, 0.016)).toEqual({ angle: 0, armed: false });

@@ -1,4 +1,5 @@
 import { PLACES, type Place } from "./village-places";
+import { OBSTACLES } from "./village-props";
 
 export type GroundPosition = [number, number, number];
 export const AR_DEFAULT_SCALE = 0.025;
@@ -59,6 +60,7 @@ export function viewpoint(place: Place): GroundPosition {
 export function safeLanding(x: number, z: number): boolean {
   if (!Number.isFinite(x) || !Number.isFinite(z) || Math.hypot(x, z) > 12) return false;
   if (Math.hypot(x, z) < 2.8) return false;
+  if (!OBSTACLES.every(o => Math.hypot(x - o.x, z - o.z) > o.r)) return false;
   return PLACES.filter(p => p.id !== "grand-sapin").every(p =>
     Math.hypot(x - p.pos[0], z - p.pos[2]) > (p.id.startsWith("bonhomme") ? 1 : 1.8));
 }

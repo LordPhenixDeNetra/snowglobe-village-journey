@@ -3,6 +3,13 @@
 ## Desktop and mobile interface
 The welcome screen (wish, "Visiter librement", VR/AR buttons) and the bottom action bar (Parcours, Activités, Ambiance, Musique, Immersion) were captured with Playwright at 1440, 768 and 390 px: no console error, no horizontal overflow, panels open one at a time, Escape closes and returns focus, the music element stays mounted while panels close. Text contrast on the day ambience is computed at ≥ 4.5:1 for every token pair.
 
+## 3D decor
+The village is procedural (no new assets): eight chalets in three silhouettes with place signs, a five-tier tree with instanced lights, an 82-tree instanced forest, a frozen lake, snowy ground with paths and sparkles, eight lamp posts with painted light pools, twinkling garlands and two snowmen. Lamp posts are walking obstacles (0.35 m) in `safeLanding`; placements are unit-tested against viewpoints, gifts, sleigh stops and the AR radius.
+
+Measured on desktop with `window.__villageStats()` (one controlled render, shadow pass included): default view 109 draw calls / 136 k triangles, overview 135 / 144 k, chalet close-up 65 / 90 k. VR and AR drop decor shadows and the three lamp `PointLight`s. The five hunt gifts were captured visible, and `__sleigh.sim(4)` parks at `[6.5, 0.2, 0]` in front of the Chocolaterie. The sleigh's flight arc now peaks 3.3 m above its path so it clears the lamp-post heads (tested on every stop-to-stop trip); tree ornaments and garlands are tested to sit on the foliage; paths are tested not to cross the lake.
+
+Requires a headset: 72 fps on Quest 2 at the default and overview positions, sign legibility at 3 m, walking stopping at a lamp post, the forest letting the controller ray reach the gifts under the small trees. In AR: the miniature stays inside the placed footprint (forest radius ≤ 21 m before scaling).
+
 Requires a real session: entering VR or AR must hide the welcome screen, the bar and the tour chip (they render only while no XR session is active) and bring them back on exit. The AR overlay and VR world panels keep their previous layout until the immersive-interface PR.
 
 ## Christmas activities
