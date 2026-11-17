@@ -1,3 +1,11 @@
+# UI/3D overhaul
+- [x] Polar-night identity, welcome screen and bottom action bar with panels (desktop and mobile).
+- [x] Procedural cartoon decor: chalets with signs, five-tier tree, instanced forest, frozen lake, paths, lamp posts and garlands.
+- [x] Animated characters: reindeer and paddock, elves, Santa, skaters, with a tested distance-driven gait.
+- [x] Glass VR panel with hierarchy and hover; AR overlay with the action bar and docked panels.
+- [x] Test placements, gait, panel rules and overlay; measure the draw-call and triangle budget.
+- [ ] Verify the overhaul on a Quest 2 and an AR phone (frame rate, legibility, rays, overlay taps) — needs hardware; see XR_CHECKS.md.
+
 # Christmas village additions
 - [x] Add Santa's AI mailbox with an animated parchment reply.
 - [x] Add five hidden gifts, a counter and a final fireworks celebration.

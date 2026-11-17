@@ -36,3 +36,16 @@ Points mineurs relevés en revue, sans effet bloquant pour le visiteur :
 - Revue PR2b : les pattes en élan du renne raclent la neige (aucune levée du pied pour la paire diagonale qui avance) ; ajouter une flexion du genou proportionnelle à `max(0, cos(phase·2π))`.
 - Revue PR2b : les rennes qui broutent gardent le museau à ~0,4 m au-dessus de la neige ; baisser davantage le cou ou la tête.
 - Revue PR2b : les tests de placement vérifient le centre des personnages, pas leur emprise (tête du renne, cadeau du lutin) ; soustraire un rayon d'emprise.
+
+## 2026-11-17 — PR3 interface VR/AR
+
+Points mineurs relevés en revue :
+
+- Canvas VR : si Fredoka se charge après le premier dessin, seuls les boutons redessinés (survol, état) passent en Fredoka ; redessiner après `document.fonts.ready`.
+- `WorldPanel` : boutons transparents qui écrivent la profondeur devant un verre qui ne l'écrit pas ; risque de coins qui percent le verre selon le tri (`renderOrder` ou `alphaTest`) — à confirmer en casque.
+- « Promenade libre » est actif mais sans effet (et sans gestionnaire dans le repli AR) ; le désactiver hors parcours.
+- Double impulsion haptique sur « Point de vue suivant » et sur le bouton d'étape (`visit` → `land` vibre déjà).
+- AR : la pastille d'état n'est pas cliquable, un tap dessus peut poser le village quand une surface est détectée.
+- `ActionBar` : `forceMobile` est inutilisé et le `createPortal` est redondant quand la barre est déjà dans le conteneur.
+- Réticule AR : couleur de secours `"white"` pendant la première image ; ne rendre le réticule qu'une fois les couleurs lues.
+- Overlay AR : pas de marges `safe-area-inset-left/right` (téléphone en paysage avec encoche).
