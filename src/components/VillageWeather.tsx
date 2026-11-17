@@ -3,60 +3,66 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { WEATHER_LIGHT, type Ambience } from "@/lib/village-weather";
 
+const SCENE_TOKENS = [
+  "day-sky",
+  "dusk-sky",
+  "night-sky",
+  "day-light",
+  "dusk-light",
+  "night-light",
+  "snow",
+  "smoke",
+  "gold",
+  "red",
+  "blue",
+  "green",
+  "aurora-green",
+  "aurora-rose",
+  "plum",
+  "copper",
+  "wood",
+  "bark",
+  "needle",
+  "needle-dark",
+  "ice",
+  "lantern",
+  "path",
+  "stone",
+  "scarf",
+  "fur",
+  "fur-light",
+  "antler",
+  "nose",
+  "skin",
+];
+
+let cache: Record<string, THREE.Color> | null = null;
+
+/** Reads the --scene-* oklch tokens once through a 1×1 canvas (the browser converts them to sRGB). */
+function readSceneColors(): Record<string, THREE.Color> {
+  if (cache) return cache;
+  const ctx = document.createElement("canvas").getContext("2d");
+  if (!ctx) return {};
+  const css = getComputedStyle(document.documentElement);
+  const result: Record<string, THREE.Color> = {};
+  for (const name of SCENE_TOKENS) {
+    ctx.fillStyle = css.getPropertyValue(`--scene-${name}`).trim();
+    ctx.fillRect(0, 0, 1, 1);
+    const data = ctx.getImageData(0, 0, 1, 1).data;
+    result[name] = new THREE.Color().setRGB(
+      (data[0] ?? 0) / 255,
+      (data[1] ?? 0) / 255,
+      (data[2] ?? 0) / 255,
+      THREE.SRGBColorSpace,
+    );
+  }
+  cache = result;
+  return result;
+}
+
+/** Scene colours, available on the very first render so nothing is drawn black for a frame. */
 export function useWeatherColors() {
-  const [colors, setColors] = useState<Record<string, THREE.Color>>({});
-  useEffect(() => {
-    const css = getComputedStyle(document.documentElement);
-    const canvas = document.createElement("canvas");
-    canvas.width = 1;
-    canvas.height = 1;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    const result: Record<string, THREE.Color> = {};
-    for (const name of [
-      "day-sky",
-      "dusk-sky",
-      "night-sky",
-      "day-light",
-      "dusk-light",
-      "night-light",
-      "snow",
-      "smoke",
-      "gold",
-      "red",
-      "blue",
-      "green",
-      "aurora-green",
-      "aurora-rose",
-      "plum",
-      "copper",
-      "wood",
-      "bark",
-      "needle",
-      "needle-dark",
-      "ice",
-      "lantern",
-      "path",
-      "stone",
-      "scarf",
-      "fur",
-      "fur-light",
-      "antler",
-      "nose",
-      "skin",
-    ]) {
-      ctx.fillStyle = css.getPropertyValue(`--scene-${name}`).trim();
-      ctx.fillRect(0, 0, 1, 1);
-      const data = ctx.getImageData(0, 0, 1, 1).data;
-      result[name] = new THREE.Color().setRGB(
-        (data[0] ?? 0) / 255,
-        (data[1] ?? 0) / 255,
-        (data[2] ?? 0) / 255,
-        THREE.SRGBColorSpace,
-      );
-    }
-    setColors(result);
-  }, []);
+  const [colors] = useState(readSceneColors);
   return colors;
 }
 
@@ -87,30 +93,43 @@ export function WeatherLighting({ ambience, ar }: { ambience: Ambience; ar: bool
         shadow-camera-top={22}
         shadow-camera-bottom={-22}
       />
-      {!ar && ambience === "night" && <Aurora colors={colors} />}
+      {!ar && <Aurora colors={colors} night={ambience === "night"} />}
     </>
   );
 }
 
-function Aurora({ colors }: { colors: Record<string, THREE.Color> }) {
+// Mounted from the start (outside AR) so its shader compiles at load, not on the first switch to night:
+// by day it is drawn once, fully transparent, then hidden.
+function Aurora({ colors, night }: { colors: Record<string, THREE.Color>; night: boolean }) {
   const material = useRef<THREE.ShaderMaterial>(null);
+  const mesh = useRef<THREE.Mesh>(null);
+  const warmed = useRef(false);
   const uniforms = useMemo(
     () => ({
       time: { value: 0 },
+      strength: { value: 0 },
       green: { value: new THREE.Color() },
       rose: { value: new THREE.Color() },
     }),
     [],
   );
+  // R3F copies each uniform into the material's own holder, so live values are written through the
+  // material ref (writing `uniforms.x.value` here would never reach the shader).
   useEffect(() => {
-    if (colors["aurora-green"]) uniforms.green.value.copy(colors["aurora-green"]);
-    if (colors["aurora-rose"]) uniforms.rose.value.copy(colors["aurora-rose"]);
-  }, [colors, uniforms]);
+    const live = material.current?.uniforms;
+    if (!live) return;
+    if (colors["aurora-green"]) live["green"]?.value.copy(colors["aurora-green"]);
+    if (colors["aurora-rose"]) live["rose"]?.value.copy(colors["aurora-rose"]);
+  }, [colors]);
   useFrame((_, dt) => {
-    if (material.current) uniforms.time.value += Math.min(dt, 0.05);
+    const live = material.current?.uniforms;
+    if (live?.["strength"]) live["strength"].value = night ? 1 : 0;
+    if (night && live?.["time"]) live["time"].value += Math.min(dt, 0.05);
+    if (mesh.current) mesh.current.visible = night || !warmed.current;
+    warmed.current = true;
   });
   return (
-    <mesh position={[0, 18, -28]} frustumCulled={false}>
+    <mesh ref={mesh} position={[0, 18, -28]} frustumCulled={false}>
       <planeGeometry args={[110, 24, 100, 1]} />
       <shaderMaterial
         ref={material}
@@ -120,7 +139,7 @@ function Aurora({ colors }: { colors: Record<string, THREE.Color> }) {
         side={THREE.DoubleSide}
         toneMapped={false}
         vertexShader={`varying vec2 vUv; uniform float time; void main(){ vUv=uv; vec3 p=position; p.z+=sin(p.x*0.12+time*0.35)*4.; p.y+=sin(p.x*0.09-time*0.22)*2.; gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.); }`}
-        fragmentShader={`varying vec2 vUv; uniform float time; uniform vec3 green; uniform vec3 rose; void main(){ float wave=0.35+0.13*sin(vUv.x*12.+time*0.4)+0.06*sin(vUv.x*28.-time*0.6); float curtain=exp(-abs(vUv.y-wave)*7.); float threads=0.6+0.4*sin(vUv.x*160.+sin(vUv.x*19.+time)*3.); float edge=smoothstep(0.,0.12,vUv.x)*smoothstep(0.,0.12,1.-vUv.x); gl_FragColor=vec4(mix(green,rose,smoothstep(0.35,0.9,vUv.y)),curtain*threads*edge*0.65); }`}
+        fragmentShader={`varying vec2 vUv; uniform float time; uniform float strength; uniform vec3 green; uniform vec3 rose; void main(){ float wave=0.35+0.13*sin(vUv.x*12.+time*0.4)+0.06*sin(vUv.x*28.-time*0.6); float curtain=exp(-abs(vUv.y-wave)*7.); float threads=0.6+0.4*sin(vUv.x*160.+sin(vUv.x*19.+time)*3.); float edge=smoothstep(0.,0.12,vUv.x)*smoothstep(0.,0.12,1.-vUv.x); gl_FragColor=vec4(mix(green,rose,smoothstep(0.35,0.9,vUv.y)),curtain*threads*edge*0.65*strength); }`}
       />
     </mesh>
   );
